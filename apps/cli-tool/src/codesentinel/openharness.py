@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Mapping
 
 from .config import CliConfig
+from .semgrep import SemgrepSummary
 from .trufflehog import TruffleHogSummary
 
 
@@ -60,18 +61,19 @@ python apps/cli-tool/tools/exa_search_tool.py --query "Your search query here"
 def build_prompt(
     scan_root: Path | None,
     trufflehog_summary: TruffleHogSummary | None = None,
+    semgrep_summary: SemgrepSummary | None = None,
     target_url: str | None = None,
 ) -> str:
     if target_url:
         return _build_url_prompt(target_url)
 
-    if scan_root is None or trufflehog_summary is None:
-        raise OpenHarnessError("Local scans require both scan_root and a precomputed TruffleHog summary")
+    if scan_root is None or trufflehog_summary is None or semgrep_summary is None:
+        raise OpenHarnessError("Local scans require scan_root, a precomputed TruffleHog summary, and a precomputed Semgrep summary")
 
-    return _build_local_prompt(scan_root, trufflehog_summary)
+    return _build_local_prompt(scan_root, trufflehog_summary, semgrep_summary)
 
 
-def _build_local_prompt(scan_root: Path, trufflehog_summary: TruffleHogSummary) -> str:
+def _build_local_prompt(scan_root: Path, trufflehog_summary: TruffleHogSummary, semgrep_summary: SemgrepSummary) -> str:
     return f"""You are CodeSentinel, an active web defense agent.
 
 You are scanning a LOCAL codebase at:
@@ -81,11 +83,14 @@ You are scanning a LOCAL codebase at:
 You have direct access to the source files. Rely on static analysis first:
 - Read files directly to understand the project structure, dependencies, and configuration.
 - Use the precomputed TruffleHog result below when writing the secret scan section. It may include current filesystem findings and Git history findings. Do not rerun TruffleHog.
+- Use the precomputed Semgrep result below when writing the static analysis section. Do not rerun Semgrep.
 - Look for insecure patterns and misconfigurations in the source.
-- When Semgrep is integrated in a future phase, it will handle deeper static analysis.
 
 Precomputed TruffleHog result:
 {trufflehog_summary.to_prompt_text()}
+
+Precomputed Semgrep result:
+{semgrep_summary.to_prompt_text()}
 
 ## When to Use Dynamic Tools
 Only use the browser or JS analyzer tools if static analysis is insufficient, for example if you find a local dev server URL and want to verify a runtime vulnerability, or if you need to test a specific endpoint behavior. The web search tool (Exa) is always available if you need to look up unfamiliar technologies, CVEs, or documentation.
@@ -101,11 +106,12 @@ Return a concise Markdown report with these sections:
 ## Summary
 ## Repository Facts
 ## Secret Scan Result
+## Static Analysis Result
 ## Findings
 ## Recommendations
 ## Limitations & Next Steps
 
-Be clear that Semgrep, deployed URL scans, and PR creation are intentionally out of scope for local scans in the current phase.
+Be clear that authenticated Semgrep AppSec Platform scans, deployed URL scans, and PR creation are intentionally out of scope for local scans in the current phase.
 """
 
 
@@ -216,6 +222,7 @@ def run_openharness(
     scan_root: Path | None,
     config: CliConfig,
     trufflehog_summary: TruffleHogSummary | None = None,
+    semgrep_summary: SemgrepSummary | None = None,
     target_url: str | None = None,
 ) -> OpenHarnessResult:
     if shutil.which("oh") is None:
@@ -224,7 +231,12 @@ def run_openharness(
             "or install/configure openharness-ai so `oh` is on PATH."
         )
 
-    prompt = build_prompt(scan_root, trufflehog_summary=trufflehog_summary, target_url=target_url)
+    prompt = build_prompt(
+        scan_root,
+        trufflehog_summary=trufflehog_summary,
+        semgrep_summary=semgrep_summary,
+        target_url=target_url,
+    )
     cwd = scan_root or Path.cwd()
     log(
         "starting openharness",
@@ -237,6 +249,8 @@ def run_openharness(
         cwd=cwd,
         env=build_oh_environment(config),
         text=True,
+        encoding="utf-8",
+        errors="replace",
         capture_output=True,
         check=False,
         timeout=2000,

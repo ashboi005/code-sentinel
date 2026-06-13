@@ -7,6 +7,7 @@ from pathlib import Path
 from .config import ConfigError, load_config
 from .openharness import OpenHarnessError, run_openharness
 from .report import write_report
+from .semgrep import SemgrepError, run_semgrep
 from .trufflehog import TruffleHogError, run_trufflehog
 
 
@@ -41,7 +42,13 @@ def scan(target: str | None = None, url: str | None = None) -> int:
         scan_root = resolve_scan_root(target)
         print(f"codesentinel: scanning {scan_root}", file=sys.stderr)
         trufflehog_summary = run_trufflehog(scan_root)
-        result = run_openharness(scan_root=scan_root, config=config, trufflehog_summary=trufflehog_summary)
+        semgrep_summary = run_semgrep(scan_root)
+        result = run_openharness(
+            scan_root=scan_root,
+            config=config,
+            trufflehog_summary=trufflehog_summary,
+            semgrep_summary=semgrep_summary,
+        )
         report_path = write_report(scan_root, result.report_markdown)
         print(f"CodeSentinel report written to {report_path}")
 
@@ -72,7 +79,7 @@ def main(argv: list[str] | None = None) -> int:
                 print("codesentinel: must specify either a local directory or --url", file=sys.stderr)
                 return 1
             return scan(target=args.target, url=args.url)
-    except (CliError, ConfigError, TruffleHogError, OpenHarnessError) as exc:
+    except (CliError, ConfigError, TruffleHogError, SemgrepError, OpenHarnessError) as exc:
         print(f"codesentinel: {exc}", file=sys.stderr)
         return 1
 

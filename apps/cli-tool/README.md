@@ -19,7 +19,7 @@ CODESENTINEL_OPENHARNESS_ALLOWED_TOOLS=bash,read_file,grep,glob
 uv sync
 ```
 
-Install TruffleHog or make Docker available. The CLI prefers a native `trufflehog` binary on `PATH`; if it is missing, it falls back to Docker.
+Install TruffleHog and Semgrep, or make Docker available. The CLI prefers native `trufflehog` and `semgrep` binaries on `PATH`; if either is missing, it falls back to Docker for that scanner.
 
 Filesystem fallback:
 
@@ -33,13 +33,19 @@ Git history fallback for Git repositories:
 docker run --rm -v "<scan-root>:/pwd:ro" trufflesecurity/trufflehog:latest git file:///pwd --json --results=verified,unknown,unverified,filtered_unverified --no-update
 ```
 
+Semgrep fallback:
+
+```sh
+docker run --rm -v "<scan-root>:/src:ro" semgrep/semgrep semgrep scan --config=p/ci --config=p/security-audit --config=p/owasp-top-ten --json --metrics=off /src
+```
+
 ## Run
 
 ```sh
 uv run codesentinel scan .
 ```
 
-The CLI writes `codesentinel-report.md` into the scanned project root.
+The CLI runs TruffleHog first, then Semgrep, then OpenHarness. It writes `codesentinel-report.md` into the scanned project root.
 
 If OpenHarness returns an empty structured result, the CLI will fail instead of writing a blank report. That means the transport path worked, but the agent did not actually analyze the repository.
 
@@ -61,6 +67,32 @@ trufflehog git file://<scan-root> --json --results=verified,unknown,unverified,f
 ```
 
 Findings are advisory in this first integration. CodeSentinel includes verified, unknown, unverified, and filtered unverified TruffleHog results so local test fixtures, suspicious hardcoded tokens, and historical leaks are visible. The CLI fails only when TruffleHog itself cannot run or returns a scanner error. The CLI normalizes TruffleHog JSON output before sending it to OpenHarness and includes redacted secrets only, never raw secret values.
+
+## Semgrep Static Analysis
+
+After TruffleHog completes, the CLI scans the target directory with Semgrep's local OSS rules:
+
+```sh
+semgrep scan --config=p/ci --config=p/security-audit --config=p/owasp-top-ten --json --metrics=off <scan-root>
+```
+
+Semgrep findings are advisory in this integration. CodeSentinel normalizes Semgrep JSON before sending it to OpenHarness and includes rule id, severity, message, path, line/column data, category, technology metadata, and the Semgrep configs used when available. The CLI exits nonzero only if Semgrep itself cannot run or returns a scanner error.
+
+By default, CodeSentinel does not load `.semgrep.yml` from scanned repositories. This keeps Docker-based user scans useful without requiring target projects to ship Semgrep rule files and avoids treating demo rules as production coverage.
+
+To override the default registry rulesets:
+
+```sh
+CODESENTINEL_SEMGREP_CONFIGS=p/ci,p/security-audit,p/owasp-top-ten
+```
+
+To explicitly include a target-local `.semgrep.yml` after the registry rulesets:
+
+```sh
+CODESENTINEL_SEMGREP_INCLUDE_LOCAL_CONFIG=1
+```
+
+Authenticated `semgrep ci`, Semgrep AppSec Platform features, Supply Chain, Secrets, and `semgrep mcp` are intentionally left for later phases.
 
 `apps/cli-tool/tools/dummy_tool.sh` remains available as a manual historical plumbing check, but the active scan flow no longer calls it.
 

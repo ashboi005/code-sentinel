@@ -8,6 +8,7 @@ Phase 1 builds the shared foundation:
 - a Python/uv CLI at `apps/cli-tool`
 - a local OpenHarness bridge through the documented `oh` subprocess interface
 - a TruffleHog filesystem secret scan that feeds normalized findings into the agent report
+- a Semgrep local static-analysis scan that feeds normalized findings into the agent report
 - a Markdown report written to the scanned project root
 
 ## Proxy Backend
@@ -61,7 +62,7 @@ cd apps/cli-tool
 uv sync
 ```
 
-Install TruffleHog or ensure Docker is running. The CLI prefers native `trufflehog` on `PATH`; if it is not installed, it runs `trufflesecurity/trufflehog:latest` through Docker.
+Install TruffleHog and Semgrep, or ensure Docker is running. The CLI prefers native `trufflehog` and `semgrep` binaries on `PATH`; if either is not installed, it runs the matching scanner image through Docker.
 
 Run the Phase 1 smoke test:
 
@@ -69,9 +70,13 @@ Run the Phase 1 smoke test:
 uv run codesentinel scan ../..
 ```
 
-The CLI runs TruffleHog first, then OpenHarness. It writes `codesentinel-report.md` into the scanned project root.
+The CLI runs TruffleHog first, Semgrep second, then OpenHarness. It writes `codesentinel-report.md` into the scanned project root.
 
 TruffleHog always runs in filesystem mode with `--json --results=verified,unknown,unverified,filtered_unverified --no-update`. If the target contains `.git`, CodeSentinel also runs `trufflehog git file://<scan-root>` with the same result buckets to inspect commit history. Findings are advisory for now: the scan report includes verified, unknown, unverified, and filtered unverified secret candidates, but the CLI exits nonzero only if TruffleHog itself fails or OpenHarness cannot produce a report. Raw secret values are not passed to the model; CodeSentinel uses TruffleHog redacted output.
+
+Semgrep runs in local OSS mode with `semgrep scan --config=p/ci --config=p/security-audit --config=p/owasp-top-ten --json --metrics=off <scan-root>`. Findings are advisory for now: the scan report includes normalized static-analysis findings and the Semgrep configs used, but the CLI exits nonzero only if Semgrep itself fails or OpenHarness cannot produce a report. If native Semgrep is unavailable, Docker fallback uses `semgrep/semgrep`.
+
+CodeSentinel does not load target-local `.semgrep.yml` files by default. Users can override registry configs with `CODESENTINEL_SEMGREP_CONFIGS` or explicitly include local rules with `CODESENTINEL_SEMGREP_INCLUDE_LOCAL_CONFIG=1`.
 
 If OpenHarness returns an empty structured result, treat that as a failed analysis rather than a success. The proxy path worked, but the agent did not produce a usable report.
 
@@ -97,7 +102,7 @@ The CLI configures the subprocess environment with:
 
 - Add future tools behind the CLI/report pipeline, not inside the proxy.
 - Use `apps/cli-tool/tools/dummy_tool.sh` only for manual historical plumbing checks.
-- Semgrep wrappers should follow the TruffleHog pattern: emit normalized findings before model explanation.
+- Scanner wrappers should follow the TruffleHog/Semgrep pattern: emit normalized findings before model explanation.
 - Browser Use should later attach as a local MCP server to OpenHarness, not as custom Phase 1 browser code.
 
 ## Tests
