@@ -50,6 +50,6 @@ def load_config(load_dotenv_files: bool = True) -> CliConfig:
     return CliConfig(
         proxy_url=_read_required("CODESENTINEL_PROXY_URL").rstrip("/"),
         proxy_token=_read_required("CODESENTINEL_PROXY_TOKEN"),
-        openharness_max_turns=_read_int("CODESENTINEL_OPENHARNESS_MAX_TURNS", 20),
-        openharness_allowed_tools=os.environ.get("CODESENTINEL_OPENHARNESS_ALLOWED_TOOLS", "python,bash,read_file,grep,glob"),
+        openharness_max_turns=_read_int("CODESENTINEL_OPENHARNESS_MAX_TURNS", 30),
+        openharness_allowed_tools=os.environ.get("CODESENTINEL_OPENHARNESS_ALLOWED_TOOLS", "python,bash,read_file,grep,glob,docker__ps,docker__run,docker__stop,docker__start,docker__restart,docker__rm,docker__inspect,docker__logs,docker__exec,docker__images,docker__build,docker__pull,docker__push,docker__rmi"),
     )

@@ -14,6 +14,7 @@ Usage:
     # Specify a custom output directory
     python apps/cli-tool/tools/js_analyzer_tool.py --url https://example.com --output-dir ./my_analysis
 """
+
 from __future__ import annotations
 
 import argparse
@@ -45,6 +46,10 @@ def _headers() -> dict[str, str]:
     return {"User-Agent": USER_AGENT}
 
 
+def _request_args(verify_ssl: bool) -> dict:
+    return {"headers": _headers(), "timeout": REQUEST_TIMEOUT, "verify": verify_ssl}
+
+
 def _safe_filename(url: str) -> str:
     """Derive a filesystem-safe filename from a URL."""
     parsed = urlparse(url)
@@ -56,9 +61,9 @@ def _safe_filename(url: str) -> str:
     return name
 
 
-def discover_scripts(base_url: str) -> list[str]:
+def discover_scripts(base_url: str, verify_ssl: bool = True) -> list[str]:
     """Fetch the HTML at base_url and return absolute URLs for all <script> tags."""
-    resp = requests.get(base_url, headers=_headers(), timeout=REQUEST_TIMEOUT)
+    resp = requests.get(base_url, **_request_args(verify_ssl))
     resp.raise_for_status()
 
     soup = BeautifulSoup(resp.text, "html.parser")
@@ -72,13 +77,15 @@ def discover_scripts(base_url: str) -> list[str]:
     return script_urls
 
 
-def download_and_beautify(js_url: str, output_dir: Path) -> dict:
+def download_and_beautify(
+    js_url: str, output_dir: Path, verify_ssl: bool = True
+) -> dict:
     """Download a single JS file, beautify it, and save to output_dir."""
     filename = _safe_filename(js_url)
     output_path = output_dir / filename
 
     try:
-        resp = requests.get(js_url, headers=_headers(), timeout=REQUEST_TIMEOUT)
+        resp = requests.get(js_url, **_request_args(verify_ssl))
         resp.raise_for_status()
     except requests.RequestException as e:
         return {
@@ -119,6 +126,7 @@ def run_analysis(
     base_url: str | None,
     js_url: str | None,
     output_dir: str,
+    verify_ssl: bool = True,
 ) -> dict:
     """Main entry point: discover and/or download+beautify JS bundles."""
     out = Path(output_dir)
@@ -128,12 +136,12 @@ def run_analysis(
 
     if js_url:
         # Direct single-file mode
-        result = download_and_beautify(js_url, out)
+        result = download_and_beautify(js_url, out, verify_ssl=verify_ssl)
         results.append(result)
     elif base_url:
         # Discovery mode: fetch HTML and find all scripts
         try:
-            script_urls = discover_scripts(base_url)
+            script_urls = discover_scripts(base_url, verify_ssl=verify_ssl)
         except requests.RequestException as e:
             return {
                 "status": "failed",
@@ -149,7 +157,7 @@ def run_analysis(
             }
 
         for url in script_urls:
-            result = download_and_beautify(url, out)
+            result = download_and_beautify(url, out, verify_ssl=verify_ssl)
             results.append(result)
     else:
         return {"status": "failed", "error": "Must provide --url or --js-url"}
@@ -187,6 +195,12 @@ def main() -> int:
         default=DEFAULT_OUTPUT_DIR,
         help=f"Directory to save beautified JS files (default: {DEFAULT_OUTPUT_DIR})",
     )
+    parser.add_argument(
+        "--no-verify-ssl",
+        action="store_true",
+        default=False,
+        help="Skip SSL certificate verification (use for targets with self-signed certs)",
+    )
 
     args = parser.parse_args()
 
@@ -194,6 +208,7 @@ def main() -> int:
         base_url=args.url,
         js_url=args.js_url,
         output_dir=args.output_dir,
+        verify_ssl=not args.no_verify_ssl,
     )
 
     print(json.dumps(result, indent=2))

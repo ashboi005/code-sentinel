@@ -11,7 +11,7 @@ Example `apps/cli-tool/.env`:
 ```sh
 CODESENTINEL_PROXY_URL=http://localhost:8787/v1
 CODESENTINEL_PROXY_TOKEN=replace-with-shared-demo-token
-CODESENTINEL_OPENHARNESS_MAX_TURNS=8
+CODESENTINEL_OPENHARNESS_MAX_TURNS=30
 CODESENTINEL_OPENHARNESS_ALLOWED_TOOLS=bash,read_file,grep,glob
 ```
 
