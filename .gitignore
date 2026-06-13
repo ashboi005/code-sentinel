@@ -11,4 +11,4 @@ dist/
 build/
 *.egg-info/
 codesentinel-report.md
-docs/
+

@@ -65,5 +65,5 @@ Findings are advisory in this first integration. CodeSentinel includes verified,
 `apps/cli-tool/tools/dummy_tool.sh` remains available as a manual historical plumbing check, but the active scan flow no longer calls it.
 
 ```sh
-bash tools/dummy_tool.sh --ping
+python tools/dummy_tool.py --ping
 ```
