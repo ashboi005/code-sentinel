@@ -72,7 +72,7 @@ export function loadConfig(): ProxyConfig {
               ? "openai/gpt-5.2"
               : "llama-3.1-8b-instant"
       ),
-    keyCooldownMs: readNumber("KEY_COOLDOWN_MS", 0),
+    keyCooldownMs: readNumber("KEY_COOLDOWN_MS", 10000),
     maxRetries: readNumber("MAX_GROQ_RETRIES", 1)
   };
 }
