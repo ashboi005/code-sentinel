@@ -7,6 +7,7 @@ from pathlib import Path
 from .config import ConfigError, load_config
 from .openharness import OpenHarnessError, run_openharness
 from .report import write_report
+from .trufflehog import TruffleHogError, run_trufflehog
 
 
 class CliError(RuntimeError):
@@ -31,7 +32,8 @@ def scan(target: str) -> int:
     scan_root = resolve_scan_root(target)
     config = load_config()
     print(f"codesentinel: scanning {scan_root}", file=sys.stderr)
-    result = run_openharness(scan_root, config)
+    trufflehog_summary = run_trufflehog(scan_root)
+    result = run_openharness(scan_root, config, trufflehog_summary)
     report_path = write_report(scan_root, result.report_markdown)
     print(f"CodeSentinel report written to {report_path}")
     return 0
@@ -54,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "scan":
             return scan(args.target)
-    except (CliError, ConfigError, OpenHarnessError) as exc:
+    except (CliError, ConfigError, TruffleHogError, OpenHarnessError) as exc:
         print(f"codesentinel: {exc}", file=sys.stderr)
         return 1
 

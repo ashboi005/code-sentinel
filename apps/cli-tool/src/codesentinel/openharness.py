@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Mapping
 
 from .config import CliConfig
+from .trufflehog import TruffleHogSummary
 
 
 class OpenHarnessError(RuntimeError):
@@ -27,16 +28,20 @@ def log(message: str, **details: object) -> None:
     print(f"[codesentinel] {message} {payload}", file=sys.stderr)
 
 
-def build_prompt(scan_root: Path) -> str:
+def build_prompt(scan_root: Path, trufflehog_summary: TruffleHogSummary) -> str:
     return f"""You are CodeSentinel, an active web defense agent.
 
-Phase 1 scope is a foundation smoke test only. Inspect the local project at:
+Inspect the local project at:
 {scan_root}
 
 Use tools freely to inspect only what you need for this target, but stay within the scanned project unless the task explicitly requires a dependency or referenced path outside it.
 Do not make code changes.
 Keep your answer short and focused.
-If a dummy tool script exists at `apps/cli-tool/tools/dummy_tool.sh`, call it once as a plumbing check and mention the result.
+Use the precomputed TruffleHog result below when writing the secret scan section. It may include current filesystem findings and Git history findings. Do not rerun TruffleHog.
+
+Precomputed TruffleHog result:
+{trufflehog_summary.to_prompt_text()}
+
 Your final answer must be plain markdown text in the assistant message. Do not return an empty assistant message. Do not hide the answer in tool output or reasoning-only text.
 Use tools first, then produce the final markdown report in the assistant message.
 
@@ -44,11 +49,12 @@ Return a concise Markdown report with these sections:
 # CodeSentinel Phase 1 Report
 ## Summary
 ## Repository Facts
+## Secret Scan Result
 ## Proxy/Agent Smoke Result
 ## Phase 1 Limitations
 ## Next Steps
 
-Be clear that Semgrep, TruffleHog, browser automation, deployed URL scans, and PR creation are intentionally out of scope for Phase 1.
+Be clear that Semgrep, browser automation, deployed URL scans, and PR creation are intentionally out of scope for Phase 1.
 """
 
 
@@ -67,7 +73,7 @@ def build_oh_command(prompt: str, config: CliConfig) -> list[str]:
         "codesentinel-proxy",
         "--bare",
         "--system-prompt",
-        "You are CodeSentinel. Use tools to inspect the target project, optionally run the dummy plumbing tool if present, then return a short markdown report as visible assistant text.",
+        "You are CodeSentinel. Use tools to inspect the target project, explain the precomputed TruffleHog result, then return a short markdown report as visible assistant text.",
         "--allowed-tools",
         config.openharness_allowed_tools,
         "--max-turns",
@@ -110,14 +116,14 @@ def extract_report(stdout: str) -> str:
     return text
 
 
-def run_openharness(scan_root: Path, config: CliConfig) -> OpenHarnessResult:
+def run_openharness(scan_root: Path, config: CliConfig, trufflehog_summary: TruffleHogSummary) -> OpenHarnessResult:
     if shutil.which("oh") is None:
         raise OpenHarnessError(
             "OpenHarness command `oh` was not found. Run `uv sync` in apps/cli-tool "
             "or install/configure openharness-ai so `oh` is on PATH."
         )
 
-    prompt = build_prompt(scan_root)
+    prompt = build_prompt(scan_root, trufflehog_summary)
     log(
         "starting openharness",
         scan_root=str(scan_root),
