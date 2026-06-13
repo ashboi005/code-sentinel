@@ -1,0 +1,26 @@
+[project]
+name = "codesentinel"
+version = "0.1.0"
+description = "CodeSentinel Phase 1 CLI"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "openharness-ai>=0.1.9",
+  "python-dotenv>=1.2.0",
+]
+
+[project.scripts]
+codesentinel = "codesentinel.cli:main"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
