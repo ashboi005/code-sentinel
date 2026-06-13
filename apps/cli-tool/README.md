@@ -35,9 +35,10 @@ Phase 1 runs OpenHarness in `--bare` mode with a higher turn budget and a config
 ## Dummy Tool
 
 `apps/cli-tool/tools/dummy_tool.sh` is a tiny bash tool the agent can call to prove the tool plumbing before browser or security tools are added.
+`apps/cli-tool/tools/dummy_tool.py` is the cross-platform version and is the preferred one on Windows.
 
 Example:
 
 ```sh
-bash tools/dummy_tool.sh --ping
+python tools/dummy_tool.py --ping
 ```

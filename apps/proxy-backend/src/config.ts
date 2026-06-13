@@ -7,6 +7,7 @@ export interface ProxyConfig {
   model: string;
   keyCooldownMs: number;
   maxRetries: number;
+  exaApiKey?: string;
 }
 
 function readRequired(name: string): string {
@@ -73,6 +74,7 @@ export function loadConfig(): ProxyConfig {
               : "llama-3.1-8b-instant"
       ),
     keyCooldownMs: readNumber("KEY_COOLDOWN_MS", 10000),
-    maxRetries: readNumber("MAX_GROQ_RETRIES", 1)
+    maxRetries: readNumber("MAX_GROQ_RETRIES", 1),
+    exaApiKey: Bun.env.EXA_API_KEY?.trim()
   };
 }

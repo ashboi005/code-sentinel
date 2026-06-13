@@ -321,8 +321,154 @@ export function createProxyApp(config: ProxyConfig, options: AppOptions = {}) {
       provider: config.provider,
       model: config.model,
       availableKeys: keyPool.availableCount(),
-      totalKeys: keyPool.size()
+      totalKeys: keyPool.size(),
+      exaConfigured: !!config.exaApiKey
     }))
+    .post("/v1/search", async ({ request }) => {
+      const requestId = crypto.randomUUID();
+
+      if (!hasValidBearer(request.headers.get("authorization"), config.proxyToken)) {
+        logRequest("reject unauthorized search request", {
+          requestId,
+          path: "/v1/search"
+        });
+
+        return new Response(
+          JSON.stringify({
+            error: {
+              message: "Missing or invalid CodeSentinel proxy token",
+              type: "authentication_error"
+            }
+          }),
+          {
+            status: 401,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+
+      if (!config.exaApiKey) {
+        return new Response(
+          JSON.stringify({
+            error: {
+              message: "EXA_API_KEY is not configured on the proxy backend",
+              type: "configuration_error"
+            }
+          }),
+          {
+            status: 500,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+
+      let bodyText = "";
+      try {
+        bodyText = await request.text();
+      } catch (e) {
+        // ignore
+      }
+
+      let query = "";
+      let numResults = 5;
+      try {
+        const parsed = JSON.parse(bodyText);
+        query = typeof parsed.query === "string" ? parsed.query : "";
+        numResults = typeof parsed.numResults === "number" ? parsed.numResults : 5;
+      } catch {
+        // use default
+      }
+
+      if (!query) {
+        return new Response(
+          JSON.stringify({
+            error: {
+              message: "Missing 'query' field in request body",
+              type: "invalid_request_error"
+            }
+          }),
+          {
+            status: 400,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+
+      logRequest("incoming search request", {
+        requestId,
+        query,
+        numResults
+      });
+
+      try {
+        const exaResponse = await fetch("https://api.exa.ai/search", {
+          method: "POST",
+          headers: {
+            "x-api-key": config.exaApiKey,
+            "content-type": "application/json"
+          },
+          body: JSON.stringify({
+            query,
+            numResults,
+            contents: {
+              text: true
+            }
+          })
+        });
+
+        if (!exaResponse.ok) {
+          const errText = await exaResponse.text();
+          return new Response(
+            JSON.stringify({
+              error: {
+                message: `Exa API responded with status ${exaResponse.status}`,
+                detail: errText,
+                type: "upstream_search_error"
+              }
+            }),
+            {
+              status: 502,
+              headers: { "content-type": "application/json" }
+            }
+          );
+        }
+
+        const exaData = await exaResponse.json() as any;
+        const results = Array.isArray(exaData.results) ? exaData.results : [];
+
+        const formattedResults = results.map((r: any) => ({
+          title: r.title || "No title",
+          url: r.url || "",
+          text: (r.text || "").substring(0, 1500)
+        }));
+
+        return new Response(
+          JSON.stringify({
+            status: "success",
+            query,
+            results: formattedResults
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      } catch (err) {
+        return new Response(
+          JSON.stringify({
+            error: {
+              message: "Failed to perform search query",
+              detail: err instanceof Error ? err.message : String(err),
+              type: "search_execution_error"
+            }
+          }),
+          {
+            status: 500,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+    })
     .post("/v1/chat/completions", async ({ request }) => {
       const requestId = crypto.randomUUID();
 
