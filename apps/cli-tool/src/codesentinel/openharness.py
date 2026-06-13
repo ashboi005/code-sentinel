@@ -301,7 +301,7 @@ def _build_system_prompt(target_url: str | None = None) -> str:
 
 
 def build_oh_command(
-    prompt: str, config: CliConfig, mcp_config_path: Path, target_url: str | None = None
+    prompt: str, config: CliConfig, target_url: str | None = None
 ) -> list[str]:
     return [
         "oh",
@@ -315,8 +315,7 @@ def build_oh_command(
         config.proxy_url,
         "--model",
         "codesentinel-proxy",
-        "--mcp-config",
-        str(mcp_config_path),
+        "--bare",
         "--system-prompt",
         _build_system_prompt(target_url),
         "--allowed-tools",
@@ -396,20 +395,6 @@ def extract_report(stdout: str) -> str:
     )
 
 
-def _write_mcp_config(cwd: Path) -> Path:
-    config_path = cwd / ".codesentinel-mcp.json"
-    mcp_config = {
-        "mcpServers": {
-            "docker": {
-                "command": "npx",
-                "args": ["-y", "@modelcontextprotocol/server-docker"],
-            }
-        }
-    }
-    config_path.write_text(json.dumps(mcp_config, indent=2))
-    return config_path
-
-
 def run_openharness(
     scan_root: Path | None,
     config: CliConfig,
@@ -427,7 +412,6 @@ def run_openharness(
     )
     # For URL scans, always use the CLI tool root so tools/ paths resolve correctly
     cwd = scan_root if scan_root else _CLI_TOOL_ROOT
-    mcp_config_path = _write_mcp_config(cwd)
     try:
         log(
             "starting openharness",
@@ -436,7 +420,7 @@ def run_openharness(
             proxy_url=config.proxy_url,
         )
         completed = subprocess.run(
-            build_oh_command(prompt, config, mcp_config_path, target_url),
+            build_oh_command(prompt, config, target_url),
             cwd=cwd,
             env=build_oh_environment(config),
             text=True,
@@ -453,7 +437,7 @@ def run_openharness(
                 stdout=completed.stdout[-2000:],
                 stderr=stderr[-2000:],
                 command=" ".join(
-                    build_oh_command(prompt, config, mcp_config_path, target_url)
+                    build_oh_command(prompt, config, target_url)
                 ),
             )
             raise OpenHarnessError(
@@ -471,11 +455,6 @@ def run_openharness(
         log("openharness parsed report", report_preview=report[:400])
         return OpenHarnessResult(raw_output=completed.stdout, report_markdown=report)
     finally:
-        if mcp_config_path.exists():
-            try:
-                mcp_config_path.unlink()
-            except OSError:
-                pass
         memory_path = cwd / "memory.md"
         if memory_path.exists():
             try:
