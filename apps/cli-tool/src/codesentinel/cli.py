@@ -12,17 +12,21 @@ from .trufflehog import TruffleHogError, run_trufflehog
 
 
 DESCRIPTION = """\
-╔══════════════════════════════════════════════════════════════╗
-║                       CodeSentinel                          ║
-║         AI-Powered Security Scanner & Defense Agent         ║
-╚══════════════════════════════════════════════════════════════╝
+       ___
+      [___]    ██████╗ ██████╗ ██████╗ ███████╗    ███████╗███████╗███╗   ██╗████████╗██╗███╗   ██╗███████╗██╗     
+      (o,o)   ██╔════╝██╔═══██╗██╔══██╗██╔════╝    ██╔════╝██╔════╝████╗  ██║╚══██╔══╝██║████╗  ██║██╔════╝██║     
+      /)__(\\   ██║     ██║   ██║██║  ██║█████╗      ███████╗█████╗  ██╔██╗ ██║   ██║   ██║██╔██╗ ██║█████╗  ██║     
+      "    "  ██║     ██║   ██║██║  ██║██╔══╝      ╚════██║██╔══╝  ██║╚██╗██║   ██║   ██║██║╚██╗██║██╔══╝  ██║     
+               ╚██████╗╚██████╔╝██████╔╝███████╗    ███████║███████╗██║ ╚████║   ██║   ██║██║ ╚████║███████╗███████╗
+                ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝    ╚══════╝╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝
 
-CodeSentinel is an active web defense agent that helps developers
-find and understand security vulnerabilities before production.
+CodeSentinel is an autonomous, context-aware AI agent that acts 
+as your personal security engineer.
 
-It combines static analysis tools (TruffleHog, Semgrep) with an
-AI-powered agent that performs intelligent code review and
-optional dynamic testing of live endpoints.
+Equipped with industry-standard SAST and DAST capabilities, 
+CodeSentinel has its own browser, terminal, and Docker access 
+to dynamically acquire packages, hunt down complex vulnerabilities,
+and even automatically fix them and open a PR on GitHub.
 """
 
 EPILOG = """\
@@ -96,11 +100,15 @@ def scan(
 def interactive_mode() -> int:
     """Launch the interactive TUI wizard."""
     try:
+        import time
         from rich.console import Console
         from rich.panel import Panel
         from rich.prompt import Prompt, Confirm
         from rich.text import Text
         from rich.rule import Rule
+        from rich.status import Status
+        from rich.live import Live
+        from rich.align import Align
     except ImportError:
         print(
             "codesentinel: 'rich' is required for interactive mode. "
@@ -110,14 +118,53 @@ def interactive_mode() -> int:
         return 1
 
     console = Console()
+    
+    # Fancy High-Tech Boot Sequence
+    console.clear()
+    
+    boot_messages = [
+        "Initializing your security engineer...",
+        "Loading LLM configuration options...",
+        "HACKPRIX SEASON 3 LESSSGOOOO...",
+        "Cracked Nerds present to you...",
+    ]
+    
+    with Live(console=console, refresh_per_second=20) as live:
+        for msg in boot_messages:
+            for i in range(1, 4):
+                loading_text = Text(f"{msg}{'.' * i}", style="bold green")
+                live.update(Align.center(loading_text, vertical="middle"))
+                time.sleep(0.45)
+        
+        # Flashy transition
+        for _ in range(3):
+            live.update(Align.center(Text(">>> SYSTEM READY <<<", style="bold red reverse"), vertical="middle"))
+            time.sleep(0.1)
+            live.update(Align.center(Text(">>> SYSTEM READY <<<", style="bold white"), vertical="middle"))
+            time.sleep(0.1)
+
+        live.update(Align.center(Text("Code Sentinel - your personal security engineer.", style="bold cyan"), vertical="middle"))
+        time.sleep(0.8)
+    console.clear()
 
     # Step 1: Welcome
+    console.print(Text("""\
+       ___
+      [___]    ██████╗ ██████╗ ██████╗ ███████╗    ███████╗███████╗███╗   ██╗████████╗██╗███╗   ██╗███████╗██╗     
+      (o,o)   ██╔════╝██╔═══██╗██╔══██╗██╔════╝    ██╔════╝██╔════╝████╗  ██║╚══██╔══╝██║████╗  ██║██╔════╝██║     
+      /)__(\\   ██║     ██║   ██║██║  ██║█████╗      ███████╗█████╗  ██╔██╗ ██║   ██║   ██║██╔██╗ ██║█████╗  ██║     
+      "    "  ██║     ██║   ██║██║  ██║██╔══╝      ╚════██║██╔══╝  ██║╚██╗██║   ██║   ██║██║╚██╗██║██╔══╝  ██║     
+               ╚██████╗╚██████╔╝██████╔╝███████╗    ███████║███████╗██║ ╚████║   ██║   ██║██║ ╚████║███████╗███████╗
+                ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝    ╚══════╝╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝
+""", style="bold cyan"))
+    
     welcome = Text()
-    welcome.append("CodeSentinel", style="bold cyan")
     welcome.append(" — AI-Powered Security Scanner & Defense Agent\n\n", style="dim")
     welcome.append(
-        "CodeSentinel combines static analysis tools (TruffleHog, Semgrep) with an\n"
-        "AI agent that performs intelligent code review and dynamic testing.\n\n"
+        "CodeSentinel is an autonomous, context-aware AI agent equipped with industry-standard\n"
+        "SAST and DAST capabilities. It has its own browser, terminal, and Docker access to\n"
+        "dynamically acquire packages, hunt down complex vulnerabilities, and even automatically\n"
+        "fix them and open a PR on GitHub.\n\n"
         "It supports three provider configurations:\n"
     )
     welcome.append("  1. ", style="bold")
@@ -196,6 +243,12 @@ def interactive_mode() -> int:
         return 0
 
     console.print()
+    
+    # Fancy launch spinner
+    with console.status("[bold cyan]Establishing secure connection to AI provider...", spinner="dots12"):
+        import time
+        time.sleep(1.5)
+        
     return scan(target=target, url=url, api_key=api_key, base_url=base_url, model=model)
 
 
