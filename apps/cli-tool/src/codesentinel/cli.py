@@ -237,7 +237,10 @@ def interactive_mode() -> int:
     remediation_mode: str | None = None
 
     if scan_type == "repo":
-        default_target = "/scan" if Path("/scan").is_dir() else "."
+        is_docker = Path("/scan").is_dir()
+        default_target = "/scan" if is_docker else "."
+        if is_docker:
+            console.print("[dim]Note: You are running inside Docker. Your mounted codebase is located at [bold]/scan[/bold].[/dim]")
         target = Prompt.ask("Path to repository", default=default_target)
         
         console.print()
