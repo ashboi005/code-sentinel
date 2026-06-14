@@ -75,3 +75,7 @@ During the interactive setup, you will be asked for:
 
 ---
 *Built to put world-class cyber defense in the hands of the developers who build the web.*
+*Built to democratize cybersecurity for the developers who build the web.*
+
+🛡️❤️ Made with love by Ashwath, Tushar, and Aditya 🚀
+
