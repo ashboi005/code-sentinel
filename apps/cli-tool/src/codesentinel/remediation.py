@@ -68,10 +68,20 @@ The read-only scan harness already wrote this report to codesentinel-report.md. 
 - Prefer correctness and clarity over cleverness.
 - Preserve unrelated user changes.
 - Run the most relevant available tests after editing.
+- Perform one focused verification pass after your edits. Do not repeatedly re-read or re-verify the full set of changed files once tests have passed.
+- Do not spend turns on planning, repeated TODO updates, or repeated summaries after the work is already complete.
+- Prefer editing files and running tests over narrating intent.
 - Summarize changed files, tests run, and any remaining risks.
 - Report every fix with the finding title or type, file path, original vulnerable line number if known, new fixed line number if changed, and the exact change made.
 - If the report does not include a line number for a fix, write `Line: unknown`; do not invent line numbers.
 - Never push to main, master, or any default branch.
+
+## Stop Conditions
+- Stop immediately after both of these are true:
+  1. The requested fixes have been applied.
+  2. One verification pass has completed successfully.
+- After that, return the final fix report directly.
+- If you believe the code changes are done but you are low on turns, skip further inspection and return the final fix report.
 
 ## Mode
 {mode_guidance}
@@ -127,7 +137,12 @@ def run_remediation(
 
     log("starting remediation", scan_root=str(scan_root), mode=mode, branch=branch_name)
     completed = subprocess.run(
-        build_oh_command(prompt, config, system_prompt=system_prompt),
+        build_oh_command(
+            prompt,
+            config,
+            system_prompt=system_prompt,
+            max_turns=config.remediation_max_turns,
+        ),
         cwd=scan_root,
         env=build_oh_environment(config),
         text=True,
@@ -158,7 +173,90 @@ def run_remediation(
     try:
         return extract_report(completed.stdout)
     except OpenHarnessError as exc:
+        log("remediation missing final report", error=str(exc))
+        if _has_remediation_changes(scan_root):
+            return _run_wrap_up_remediation(scan_root, config, report_markdown, mode)
         raise RemediationError(str(exc)) from exc
+
+
+def _has_remediation_changes(scan_root: Path) -> bool:
+    return bool(_committable_files(scan_root))
+
+
+def _wrap_up_prompt(scan_root: Path, report_markdown: str, mode: str) -> str:
+    return f"""You are CodeSentinel's remediation harness.
+
+You are in wrap-up mode for a remediation run at:
+{scan_root}
+
+The scan report remains the source of truth:
+
+{report_markdown.strip()}
+
+Important:
+- Do NOT make any further code changes.
+- Do NOT run another full verification sweep.
+- Do NOT revisit the whole codebase.
+- Assume the fixes already present in the working tree are the final changes.
+- Your only job is to inspect the current changed files just enough to write the final fix report.
+- If needed, run at most one lightweight check to support the report.
+
+Return concise Markdown with exactly this structure:
+# CodeSentinel Fix Report
+## Summary
+## Fixed Findings
+For each fixed finding, include:
+- Finding:
+- File:
+- Original line:
+- Fixed line:
+- Exact change:
+
+## Changed Lines
+List each changed file and line range. Use `Line: unknown` when a reliable line number is unavailable.
+
+## Tests Run
+## Remaining Risks
+"""
+
+
+def _run_wrap_up_remediation(
+    scan_root: Path, config: CliConfig, report_markdown: str, mode: str
+) -> str:
+    system_prompt = (
+        "You are CodeSentinel's remediation wrap-up harness. "
+        "Do not edit code. Summarize the existing remediation changes and finish the required fix report."
+    )
+    prompt = _wrap_up_prompt(scan_root, report_markdown, mode)
+    log("starting remediation wrap-up", scan_root=str(scan_root), mode=mode)
+    completed = subprocess.run(
+        build_oh_command(
+            prompt,
+            config,
+            system_prompt=system_prompt,
+            max_turns=min(config.remediation_max_turns, 25),
+        ),
+        cwd=scan_root,
+        env=build_oh_environment(config),
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        check=False,
+        timeout=900,
+    )
+    if completed.returncode != 0:
+        stderr = completed.stderr.strip()
+        raise RemediationError(
+            "OpenHarness remediation wrap-up failed with exit code "
+            f"{completed.returncode}." + (f"\n\nstderr:\n{stderr}" if stderr else "")
+        )
+    try:
+        return extract_report(completed.stdout)
+    except OpenHarnessError as exc:
+        raise RemediationError(
+            "Remediation changes were applied, but the final fix report could not be recovered."
+        ) from exc
 
 
 def _run_git(scan_root: Path, *args: str) -> str:

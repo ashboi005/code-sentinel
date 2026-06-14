@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -10,8 +11,9 @@ from rich.rule import Rule
 from rich.table import Table
 from rich.text import Text
 
-from .semgrep import SemgrepSummary
-from .trufflehog import TruffleHogSummary
+if TYPE_CHECKING:
+    from .semgrep import SemgrepSummary
+    from .trufflehog import TruffleHogSummary
 
 
 console = Console(stderr=True)

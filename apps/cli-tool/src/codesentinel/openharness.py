@@ -322,6 +322,7 @@ def build_oh_command(
     config: CliConfig,
     target_url: str | None = None,
     system_prompt: str | None = None,
+    max_turns: int | None = None,
 ) -> list[str]:
     return [
         "oh",
@@ -341,7 +342,7 @@ def build_oh_command(
         "--allowed-tools",
         config.openharness_allowed_tools,
         "--max-turns",
-        str(config.openharness_max_turns),
+        str(max_turns or config.openharness_max_turns),
     ]
 
 
