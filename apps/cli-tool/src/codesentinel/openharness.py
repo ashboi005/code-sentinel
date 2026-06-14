@@ -242,7 +242,7 @@ Only use the browser or JS analyzer tools if static analysis is insufficient, fo
 {_dynamic_reporting()}
 
 ## Targeted Analysis
-TruffleHog and Semgrep have already performed exhaustive static analysis on this codebase. You do not need to read every file. Instead, selectively focus your manual review on key architectural files — such as server entry points, routers, middleware, database configuration, authentication logic, and environment handling — where security-critical decisions are typically made. The static tools have already covered the broad surface; your job is to apply expert judgment to the files that matter most.
+TruffleHog and Semgrep have already performed static analysis on this codebase. You are free to use your file reading and search tools to conduct any further analysis as you see fit. However, as a best practice, please ensure you at least check the most critical architectural files — such as server entry points, routers, middleware, database configuration, and authentication logic — just in case the static tools missed any context-dependent security flaws.
 
 Do not make code changes. Keep your answer short and focused.
 {TOOL_DOCS}
