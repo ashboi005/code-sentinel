@@ -70,7 +70,7 @@ To raise a pull request after fixing locally:
 uv run codesentinel scan . --fix-pr
 ```
 
-`--fix-pr` requires a Git repository and `CODESENTINEL_GITHUB_TOKEN`. It creates a `codesentinel/fix-<timestamp>` branch before remediation. The remediation harness should use GitHub MCP for GitHub operations such as repository metadata, branch publishing, and pull request creation. It must not push to `main`, `master`, or another default branch, and it must not merge the pull request.
+`--fix-pr` requires a Git repository and `CODESENTINEL_GITHUB_TOKEN`. It creates a `codesentinel/fix-<timestamp>` branch before remediation. After the remediation harness finishes applying code changes and writing `fix.md`, the CLI commits the remediation changes, pushes the remediation branch with the provided token, and opens a pull request through the GitHub API. It never pushes to `main`, `master`, or another default branch, and it never merges the pull request.
 
 Plain `uv run codesentinel scan .` remains report-only. `uv run codesentinel remediate . --apply-local` and `uv run codesentinel remediate . --github-pr` remain available when you want to rerun remediation from an existing report; both manual remediation modes also write `fix.md`.
 

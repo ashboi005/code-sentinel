@@ -29,6 +29,8 @@ class OpenHarnessResult:
 
 
 def log(message: str, **details: object) -> None:
+    if os.environ.get("CODESENTINEL_DEBUG", "").strip() != "1":
+        return
     payload = json.dumps(details, default=str, sort_keys=True)
     print(f"[codesentinel] {message} {payload}", file=sys.stderr)
 
@@ -213,7 +215,11 @@ def build_prompt(
     return _build_local_prompt(scan_root, trufflehog_summary, semgrep_summary)
 
 
-def _build_local_prompt(scan_root: Path, trufflehog_summary: TruffleHogSummary, semgrep_summary: SemgrepSummary) -> str:
+def _build_local_prompt(
+    scan_root: Path,
+    trufflehog_summary: TruffleHogSummary,
+    semgrep_summary: SemgrepSummary,
+) -> str:
     return f"""You are CodeSentinel, an active web defense agent.
 
 You are scanning a LOCAL codebase at:

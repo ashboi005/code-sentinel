@@ -4,10 +4,11 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from .presenter import print_note, print_semgrep_summary, print_stage, print_success
 
 
 SEMGREP_IMAGE = "semgrep/semgrep"
@@ -41,7 +42,11 @@ class SemgrepSummary:
     configs_used: list[str] = field(default_factory=list)
 
     def to_prompt_text(self) -> str:
-        config_text = "Configs used: " + ", ".join(self.configs_used) + ".\n" if self.configs_used else ""
+        config_text = (
+            "Configs used: " + ", ".join(self.configs_used) + ".\n"
+            if self.configs_used
+            else ""
+        )
         if self.total_findings == 0:
             return f"{config_text}Semgrep scan completed with no findings."
 
@@ -65,7 +70,9 @@ class SemgrepSummary:
             }
             for finding in self.findings
         ]
-        return f"{config_text}{heading}\n{json.dumps(payload, indent=2, sort_keys=True)}"
+        return (
+            f"{config_text}{heading}\n{json.dumps(payload, indent=2, sort_keys=True)}"
+        )
 
 
 def build_semgrep_command(scan_root: Path) -> list[str]:
@@ -100,7 +107,9 @@ def build_semgrep_command(scan_root: Path) -> list[str]:
             "/src",
         ]
 
-    raise SemgrepError("Semgrep was not found and Docker is not available for the Semgrep fallback.")
+    raise SemgrepError(
+        "Semgrep was not found and Docker is not available for the Semgrep fallback."
+    )
 
 
 def _configured_rulesets() -> list[str]:
@@ -115,10 +124,14 @@ def _configured_rulesets() -> list[str]:
 
 
 def _include_local_config() -> bool:
-    return os.environ.get("CODESENTINEL_SEMGREP_INCLUDE_LOCAL_CONFIG", "").strip() == "1"
+    return (
+        os.environ.get("CODESENTINEL_SEMGREP_INCLUDE_LOCAL_CONFIG", "").strip() == "1"
+    )
 
 
-def _native_config_args(scan_root: Path, configs: list[str], include_local_config: bool) -> list[str]:
+def _native_config_args(
+    scan_root: Path, configs: list[str], include_local_config: bool
+) -> list[str]:
     args = [f"--config={config}" for config in configs]
     local_config = scan_root / ".semgrep.yml"
     if include_local_config and local_config.exists():
@@ -126,7 +139,9 @@ def _native_config_args(scan_root: Path, configs: list[str], include_local_confi
     return args
 
 
-def _docker_config_args(scan_root: Path, configs: list[str], include_local_config: bool) -> list[str]:
+def _docker_config_args(
+    scan_root: Path, configs: list[str], include_local_config: bool
+) -> list[str]:
     args = [f"--config={config}" for config in configs]
     if include_local_config and (scan_root / ".semgrep.yml").exists():
         args.append("--config=/src/.semgrep.yml")
@@ -146,7 +161,11 @@ def parse_semgrep_json(
     if not isinstance(payload, dict) or not isinstance(payload.get("results"), list):
         raise SemgrepError("Semgrep JSON output did not include a results list.")
 
-    all_findings = [_normalize_finding(result) for result in payload["results"] if isinstance(result, dict)]
+    all_findings = [
+        _normalize_finding(result)
+        for result in payload["results"]
+        if isinstance(result, dict)
+    ]
     findings = all_findings[:limit]
     return SemgrepSummary(
         total_findings=len(all_findings),
@@ -161,7 +180,11 @@ def run_semgrep(scan_root: Path) -> SemgrepSummary:
     if _include_local_config() and (scan_root / ".semgrep.yml").exists():
         configs_used.append(str(scan_root / ".semgrep.yml"))
     command = build_semgrep_command(scan_root)
-    print("[codesentinel] starting semgrep " + json.dumps({"scan_root": str(scan_root)}, sort_keys=True), file=sys.stderr)
+    print_stage(
+        "Code Review",
+        "Inspecting source paths for high-signal security issues",
+        icon="+",
+    )
     completed = subprocess.run(
         command,
         cwd=scan_root,
@@ -181,14 +204,10 @@ def run_semgrep(scan_root: Path) -> SemgrepSummary:
         )
 
     summary = parse_semgrep_json(completed.stdout, configs_used=configs_used)
-    print(
-        "[codesentinel] semgrep completed "
-        + json.dumps(
-            {"total_findings": summary.total_findings, "included_findings": summary.included_findings},
-            sort_keys=True,
-        ),
-        file=sys.stderr,
-    )
+    print_semgrep_summary(summary)
+    if summary.configs_used:
+        print_note("Rulesets tuned for CI, security audit, and OWASP coverage")
+    print_success("Code review completed")
     return summary
 
 

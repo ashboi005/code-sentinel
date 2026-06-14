@@ -189,7 +189,7 @@ To create a pull request after fixing locally:
 CODESENTINEL_GITHUB_TOKEN=github_pat_or_token_here uv run codesentinel scan ../.. --fix-pr
 ```
 
-GitHub PR mode requires the target to be a Git repository. It creates a `codesentinel/fix-<timestamp>` branch before remediation, then expects GitHub MCP to be available to the remediation harness for GitHub operations. Prefer GitHub's official MCP server in local Docker mode, but do not add a Docker MCP server: when Docker is needed, CodeSentinel agents use ordinary shell commands against the host Docker CLI and daemon, as described in `docs/handoff.md`. The token should have least-privilege repository contents and pull request permissions. CodeSentinel never instructs the agent to push directly to `main`, `master`, or another default branch, and it never instructs the agent to merge the PR.
+GitHub PR mode requires the target to be a Git repository. It creates a `codesentinel/fix-<timestamp>` branch before remediation, lets the remediation harness focus on code changes only, then uses the provided `CODESENTINEL_GITHUB_TOKEN` to commit the remediation changes, push the remediation branch, and open a pull request through the GitHub API. The token should have least-privilege repository contents and pull request permissions. CodeSentinel never pushes directly to `main`, `master`, or another default branch, and it never merges the PR.
 
 `codesentinel remediate <repo> --apply-local` and `codesentinel remediate <repo> --github-pr` remain available when you want to rerun remediation from an existing `codesentinel-report.md`.
 

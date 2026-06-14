@@ -3,10 +3,11 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from .presenter import print_note, print_stage, print_success, print_trufflehog_summary
 
 
 TRUFFLEHOG_IMAGE = "trufflesecurity/trufflehog:latest"
@@ -52,14 +53,22 @@ class TruffleHogSummary:
 
     def to_prompt_text(self) -> str:
         if self.total_findings == 0:
-            git_status = "Git history was scanned." if self.git_history_scanned else "Git history was skipped because the target is not a Git repository."
+            git_status = (
+                "Git history was scanned."
+                if self.git_history_scanned
+                else "Git history was skipped because the target is not a Git repository."
+            )
             return f"TruffleHog scan completed with no verified, unknown, unverified, or filtered unverified findings. {git_status}"
 
         heading = f"TruffleHog scan found {self.total_findings} finding(s)"
         if self.included_findings < self.total_findings:
             heading += f", showing {self.included_findings} of {self.total_findings}"
         heading += f". Counts by source: {json.dumps(self.finding_counts_by_source, sort_keys=True)}."
-        heading += " Git history was scanned." if self.git_history_scanned else " Git history was skipped because the target is not a Git repository."
+        heading += (
+            " Git history was scanned."
+            if self.git_history_scanned
+            else " Git history was skipped because the target is not a Git repository."
+        )
 
         payload = [
             {
@@ -125,7 +134,9 @@ def _build_filesystem_command(scan_root: Path) -> TruffleHogCommand:
             ],
         )
 
-    raise TruffleHogError("TruffleHog was not found and Docker is not available for the TruffleHog fallback.")
+    raise TruffleHogError(
+        "TruffleHog was not found and Docker is not available for the TruffleHog fallback."
+    )
 
 
 def _build_git_command(scan_root: Path) -> TruffleHogCommand:
@@ -160,10 +171,14 @@ def _build_git_command(scan_root: Path) -> TruffleHogCommand:
             ],
         )
 
-    raise TruffleHogError("TruffleHog was not found and Docker is not available for the TruffleHog fallback.")
+    raise TruffleHogError(
+        "TruffleHog was not found and Docker is not available for the TruffleHog fallback."
+    )
 
 
-def parse_trufflehog_jsonl(stdout: str, source_kind: str, limit: int = DEFAULT_FINDING_LIMIT) -> TruffleHogSummary:
+def parse_trufflehog_jsonl(
+    stdout: str, source_kind: str, limit: int = DEFAULT_FINDING_LIMIT
+) -> TruffleHogSummary:
     all_findings = []
     for line in stdout.splitlines():
         if not line.strip():
@@ -189,11 +204,10 @@ def run_trufflehog(scan_root: Path) -> TruffleHogSummary:
     commands = build_trufflehog_commands(scan_root)
     summaries = []
     for command in commands:
-        print(
-            "[codesentinel] starting trufflehog "
-            + json.dumps({"scan_root": str(scan_root), "source_kind": command.source_kind}, sort_keys=True),
-            file=sys.stderr,
-        )
+        detail = "Sweeping tracked files for exposed credentials"
+        if command.source_kind == "git":
+            detail = "Reviewing repository history for leaked secrets"
+        print_stage("Secret Sweep", detail, icon="~")
         completed = subprocess.run(
             command.argv,
             cwd=scan_root,
@@ -212,27 +226,24 @@ def run_trufflehog(scan_root: Path) -> TruffleHogSummary:
                 + (f"\n\nstderr:\n{stderr}" if stderr else "")
             )
 
-        summaries.append(parse_trufflehog_jsonl(completed.stdout, source_kind=command.source_kind))
+        summaries.append(
+            parse_trufflehog_jsonl(completed.stdout, source_kind=command.source_kind)
+        )
 
     summary = _merge_summaries(summaries)
-    print(
-        "[codesentinel] trufflehog completed "
-        + json.dumps(
-            {
-                "total_findings": summary.total_findings,
-                "included_findings": summary.included_findings,
-                "finding_counts_by_source": summary.finding_counts_by_source,
-                "git_history_scanned": summary.git_history_scanned,
-            },
-            sort_keys=True,
-        ),
-        file=sys.stderr,
-    )
+    print_trufflehog_summary(summary)
+    if summary.git_history_scanned:
+        print_note("Repository history was included in the secret sweep")
+    print_success("Secret sweep completed")
     return summary
 
 
 def _is_finding_payload(payload: object) -> bool:
-    return isinstance(payload, dict) and isinstance(payload.get("SourceMetadata"), dict) and "DetectorName" in payload
+    return (
+        isinstance(payload, dict)
+        and isinstance(payload.get("SourceMetadata"), dict)
+        and "DetectorName" in payload
+    )
 
 
 def _normalize_finding(payload: dict[str, Any], source_kind: str) -> TruffleHogFinding:
@@ -242,7 +253,9 @@ def _normalize_finding(payload: dict[str, Any], source_kind: str) -> TruffleHogF
         detector_name=_optional_str(payload.get("DetectorName")),
         detector_type=_optional_int(payload.get("DetectorType")),
         decoder_name=_optional_str(payload.get("DecoderName")),
-        verified=payload.get("Verified") if isinstance(payload.get("Verified"), bool) else None,
+        verified=payload.get("Verified")
+        if isinstance(payload.get("Verified"), bool)
+        else None,
         file=_optional_str(source.get("file")),
         line=_optional_int(source.get("line")),
         commit=_optional_str(source.get("commit")),
@@ -250,7 +263,9 @@ def _normalize_finding(payload: dict[str, Any], source_kind: str) -> TruffleHogF
         repository=_optional_str(source.get("repository")),
         timestamp=_optional_str(source.get("timestamp")),
         redacted=_optional_str(payload.get("Redacted")),
-        extra_data=payload.get("ExtraData") if isinstance(payload.get("ExtraData"), dict) else {},
+        extra_data=payload.get("ExtraData")
+        if isinstance(payload.get("ExtraData"), dict)
+        else {},
     )
 
 
@@ -286,7 +301,9 @@ def _merge_summaries(summaries: list[TruffleHogSummary]) -> TruffleHogSummary:
         findings=findings,
         finding_counts_by_source=_count_findings_by_source(findings),
         git_history_scanned=any(summary.git_history_scanned for summary in summaries),
-        git_history_skipped=not any(summary.git_history_scanned for summary in summaries),
+        git_history_skipped=not any(
+            summary.git_history_scanned for summary in summaries
+        ),
     )
 
 
