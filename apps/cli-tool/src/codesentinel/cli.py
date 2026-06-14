@@ -183,8 +183,8 @@ def interactive_mode() -> int:
         "It supports three provider configurations:\n"
     )
     welcome.append("  1. ", style="bold")
-    welcome.append("Built-in Proxy", style="bold green")
-    welcome.append(" — Use the CodeSentinel cloud proxy (default)\n")
+    welcome.append("Deployed Lightweight Model (Proxy)", style="bold green")
+    welcome.append(" — Use the CodeSentinel cloud proxy (default). Use your own advanced model for better results!\n")
     welcome.append("  2. ", style="bold")
     welcome.append("Bring Your Own Key", style="bold yellow")
     welcome.append(" — Use your own API key (OpenAI, Groq, Anthropic, etc.)\n")
@@ -220,7 +220,7 @@ def interactive_mode() -> int:
         model = Prompt.ask("Ollama model name", default="llama3")
         console.print(f"Using Ollama at [cyan]{base_url}[/cyan]")
     else:
-        console.print("\n[green]Using the built-in CodeSentinel proxy[/green]")
+        console.print("\n[green]Using the CodeSentinel deployed lightweight model (Proxy)[/green]")
 
     # Step 3: Choose scan type
     console.print()
