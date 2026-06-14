@@ -350,21 +350,26 @@ def _current_branch(scan_root: Path) -> str:
 
 
 def _committable_files(scan_root: Path) -> list[str]:
-    status = _run_git(scan_root, "status", "--short")
-    paths: list[str] = []
-    for line in status.splitlines():
-        if len(line) < 4:
-            continue
-        path = line[3:]
-        if " -> " in path:
-            path = path.split(" -> ", 1)[1]
-        name = Path(path).name
-        if name in {REPORT_NAME, FIX_REPORT_NAME}:
-            continue
-        if name == ".env" or name.startswith(".env."):
-            continue
-        paths.append(path)
-    return paths
+    """Return list of changed files (for the empty-check only)."""
+    status = _run_git(scan_root, "status", "--porcelain")
+    return [line for line in status.splitlines() if line.strip()]
+
+
+def _stage_changes(scan_root: Path) -> None:
+    """Stage all changes then unstage files we never want committed."""
+    _run_git(scan_root, "add", ".")
+    # Unstage reports and env files — ignore errors if they don't exist
+    for name in (REPORT_NAME, FIX_REPORT_NAME):
+        try:
+            _run_git(scan_root, "reset", "HEAD", "--", name)
+        except RemediationError:
+            pass
+    # Unstage any .env files at the repo root
+    for env_file in scan_root.glob(".env*"):
+        try:
+            _run_git(scan_root, "reset", "HEAD", "--", env_file.name)
+        except RemediationError:
+            pass
 
 
 def _commit_message() -> str:
@@ -407,7 +412,7 @@ def finalize_github_pr(scan_root: Path, token: str) -> str:
         raise RemediationError("No committable remediation changes were found")
 
     branch = _current_branch(scan_root)
-    _run_git(scan_root, "add", "--", *files)
+    _stage_changes(scan_root)
 
     staged = _run_git(scan_root, "diff", "--cached", "--name-only")
     if not staged.strip():

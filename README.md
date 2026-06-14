@@ -28,8 +28,8 @@ CodeSentinel bridges the gap by combining industry-standard static analysis tool
 ## 🔍 Two Modes of Attack
 
 ### 1. Static Mode (Local Repo)
-Point CodeSentinel at a local directory. It reads your codebase, understands the architectural context, runs underlying tools (like TruffleHog and Semgrep natively), filters out the noise, and provides a prioritized report of security flaws.
-👉 **[View a sample Static Analysis Report here](./static-analysis-code-report.pdf)**
+Point CodeSentinel at a local directory. It reads your codebase, understands the architectural context, runs underlying tools (like TruffleHog and Semgrep natively), filters out the noise, and provides a prioritized report of security flaws. It can then **automatically fix** the vulnerabilities it finds and package the changes into a GitHub PR.
+👉 **[View a sample Static Analysis Report](./static-analysis-code-report.pdf)** | **[View the Auto-Fix Report](./static-code-fix.pdf)**
 
 ### 2. Dynamic Mode (Live URL)
 This is where the magic happens. CodeSentinel spins up a headless browser, searches the web, extracts and beautifies minified JavaScript bundles, opens the network tab, and reads cookie headers—acting exactly like a real penetration tester.
