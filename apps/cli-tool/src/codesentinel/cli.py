@@ -237,7 +237,8 @@ def interactive_mode() -> int:
     remediation_mode: str | None = None
 
     if scan_type == "repo":
-        target = Prompt.ask("Path to repository", default=".")
+        default_target = "/scan" if Path("/scan").is_dir() else "."
+        target = Prompt.ask("Path to repository", default=default_target)
         
         console.print()
         console.print(Rule("[bold]Post-Scan Actions[/bold]"))
