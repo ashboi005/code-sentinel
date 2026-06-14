@@ -7,6 +7,7 @@ from pathlib import Path
 from .config import ConfigError, load_config
 from .openharness import OpenHarnessError, run_openharness
 from .report import write_report
+from .semgrep import SemgrepError, run_semgrep
 from .trufflehog import TruffleHogError, run_trufflehog
 
 
@@ -79,8 +80,12 @@ def scan(
         scan_root = resolve_scan_root(target)
         print(f"codesentinel: scanning {scan_root}", file=sys.stderr)
         trufflehog_summary = run_trufflehog(scan_root)
+        semgrep_summary = run_semgrep(scan_root)
         result = run_openharness(
-            scan_root=scan_root, config=config, trufflehog_summary=trufflehog_summary
+            scan_root=scan_root,
+            config=config,
+            trufflehog_summary=trufflehog_summary,
+            semgrep_summary=semgrep_summary,
         )
         report_path = write_report(scan_root, result.report_markdown)
         print(f"CodeSentinel report written to {report_path}")
@@ -270,21 +275,14 @@ def main(argv: list[str] | None = None) -> int:
             if not args.url and not args.target:
                 print("codesentinel: must specify either a local directory or --url", file=sys.stderr)
                 return 1
-
-            api_key = args.api_key
             base_url = args.base_url
+            api_key = args.api_key
             model = args.model
-
             if args.local_ollama:
-                base_url = base_url or "http://localhost:11434/v1"
-                api_key = api_key or "ollama"
-                if not model:
-                    print(
-                        "codesentinel: --local-ollama requires --model (e.g. --model llama3)",
-                        file=sys.stderr,
-                    )
-                    return 1
-
+                base_url = "http://localhost:11434/v1"
+                api_key = "ollama"
+                if model is None:
+                    model = "llama3"
             return scan(
                 target=args.target,
                 url=args.url,
@@ -292,7 +290,7 @@ def main(argv: list[str] | None = None) -> int:
                 base_url=base_url,
                 model=model,
             )
-    except (CliError, ConfigError, TruffleHogError, OpenHarnessError) as exc:
+    except (CliError, ConfigError, TruffleHogError, SemgrepError, OpenHarnessError) as exc:
         print(f"codesentinel: {exc}", file=sys.stderr)
         return 1
 

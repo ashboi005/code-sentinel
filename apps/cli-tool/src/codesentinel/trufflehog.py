@@ -198,6 +198,8 @@ def run_trufflehog(scan_root: Path) -> TruffleHogSummary:
             command.argv,
             cwd=scan_root,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             capture_output=True,
             check=False,
             timeout=180,

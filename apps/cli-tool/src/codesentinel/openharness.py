@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Mapping
 
 from .config import CliConfig
+from .semgrep import SemgrepSummary
 from .trufflehog import TruffleHogSummary
 
 
@@ -169,6 +170,7 @@ def _local_report_template() -> str:
 ## Summary
 ## Repository Facts
 ## Secret Scan Result
+## Static Analysis Result
 ## Findings
 ## Dynamic Analysis
 Only include this section if you actually used the browser or JS analyzer tools.
@@ -195,20 +197,22 @@ def _url_report_template(target_url: str) -> str:
 def build_prompt(
     scan_root: Path | None,
     trufflehog_summary: TruffleHogSummary | None = None,
+    semgrep_summary: SemgrepSummary | None = None,
     target_url: str | None = None,
 ) -> str:
     if target_url:
         return _build_url_prompt(target_url)
 
-    if scan_root is None or trufflehog_summary is None:
+    if scan_root is None or trufflehog_summary is None or semgrep_summary is None:
         raise OpenHarnessError(
-            "Local scans require both scan_root and a precomputed TruffleHog summary"
+            "Local scans require scan_root, a precomputed TruffleHog summary, "
+            "and a precomputed Semgrep summary"
         )
 
-    return _build_local_prompt(scan_root, trufflehog_summary)
+    return _build_local_prompt(scan_root, trufflehog_summary, semgrep_summary)
 
 
-def _build_local_prompt(scan_root: Path, trufflehog_summary: TruffleHogSummary) -> str:
+def _build_local_prompt(scan_root: Path, trufflehog_summary: TruffleHogSummary, semgrep_summary: SemgrepSummary) -> str:
     return f"""You are CodeSentinel, an active web defense agent.
 
 You are scanning a LOCAL codebase at:
@@ -218,11 +222,14 @@ You are scanning a LOCAL codebase at:
 You have direct access to the source files. Rely on static analysis first:
 - Read files directly to understand the project structure, dependencies, and configuration.
 - Use the precomputed TruffleHog result below when writing the secret scan section. It may include current filesystem findings and Git history findings. Do not rerun TruffleHog.
+- Use the precomputed Semgrep result below when writing the static analysis section. Do not rerun Semgrep.
 - Look for insecure patterns and misconfigurations in the source.
-- When Semgrep is integrated in a future phase, it will handle deeper static analysis.
 
 Precomputed TruffleHog result:
 {trufflehog_summary.to_prompt_text()}
+
+Precomputed Semgrep result:
+{semgrep_summary.to_prompt_text()}
 
 ## When to Use Dynamic Tools
 Only use the browser or JS analyzer tools if static analysis is insufficient, for example if you find a live application URL and want to verify a runtime vulnerability, or if you need to test a specific endpoint behavior. When you do use dynamic tools, follow the shared workflow and guardrails below. The web search tool (Exa) is always available if target evidence creates a concrete research need.
@@ -244,7 +251,7 @@ Use tools first, then produce the final markdown report in the assistant message
 
 {_local_report_template()}
 
-Be clear that Semgrep, deployed URL scans, and PR creation are intentionally out of scope for local scans in the current phase.
+Be clear that authenticated Semgrep AppSec Platform scans, deployed URL scans, and PR creation are intentionally out of scope for local scans in the current phase.
 """
 
 
@@ -402,6 +409,7 @@ def run_openharness(
     scan_root: Path | None,
     config: CliConfig,
     trufflehog_summary: TruffleHogSummary | None = None,
+    semgrep_summary: SemgrepSummary | None = None,
     target_url: str | None = None,
 ) -> OpenHarnessResult:
     if shutil.which("oh") is None:
@@ -411,7 +419,10 @@ def run_openharness(
         )
 
     prompt = build_prompt(
-        scan_root, trufflehog_summary=trufflehog_summary, target_url=target_url
+        scan_root,
+        trufflehog_summary=trufflehog_summary,
+        semgrep_summary=semgrep_summary,
+        target_url=target_url,
     )
     # For URL scans, always use the CLI tool root so tools/ paths resolve correctly
     cwd = scan_root if scan_root else _CLI_TOOL_ROOT
@@ -427,6 +438,8 @@ def run_openharness(
             cwd=cwd,
             env=build_oh_environment(config),
             text=True,
+            encoding="utf-8",
+            errors="replace",
             capture_output=True,
             check=False,
             timeout=2000,
