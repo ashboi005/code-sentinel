@@ -37,9 +37,9 @@ This is where the magic happens. CodeSentinel spins up a headless browser, searc
 > 📖 **Story Time: The InsureZeal Audit**
 > Just last week, I was handed a freelance project. The previous developers had left, and the owner asked me to analyze the live website (I didn't even have the codebase yet!). Doing it manually, I found 2 or 3 unauthenticated endpoints. 
 > 
-> Then, I pointed CodeSentinel at the live URL.
+> Then, I pointed CodeSentinel at the live URL while building it at the HackPrix Season 3.
 > 
-> It found **over 15 hidden endpoints**, including exposed Supabase REST and storage URLs. It extracted a JWT with an expiration of over 10 years, reverse-engineered the Anon Key, made its own HTTP requests to the Supabase endpoint, and successfully fetched a publicly accessible table dumping **plaintext passwords** and usernames. It did in 3 minutes what would have taken days to map out manually.
+> It found **over 15 hidden endpoints**, including exposed Supabase REST and storage URLs. It extracted a JWT with an expiration of over 10 years, reverse-engineered the Anon Key, made its own HTTP requests to the Supabase endpoint, and successfully fetched a publicly accessible table dumping **plaintext passwords** and usernames. It did in 10 minutes what would have needed a proper cybersecurity researcher otherwise.
 > 
 > 👉 **[Read the terrifying InsureZeal Audit Report here](./codesentinel-insurezeal-report.pdf)**
 
@@ -47,7 +47,7 @@ This is where the magic happens. CodeSentinel spins up a headless browser, searc
 
 ## 🛠️ Technical Setup & Usage
 
-CodeSentinel is designed to be frictionless to run. We package everything into a Docker container so you don't need to install Python, Node, Semgrep, or Go on your local machine.
+CodeSentinel is designed to be frictionless to run. We package everything into a Docker container so you don't need to install anything and worry about OS/runtimes.
 
 ### Quick Start (Docker)
 
