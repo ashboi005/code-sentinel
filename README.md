@@ -10,6 +10,7 @@ Phase 1 builds the shared foundation:
 - a TruffleHog filesystem secret scan that feeds normalized findings into the agent report
 - a Semgrep local static-analysis scan that feeds normalized findings into the agent report
 - a Markdown report written to the scanned project root
+- optional scan flags that run remediation after report generation and can apply fixes locally or prepare a GitHub PR
 
 ## Proxy Backend
 
@@ -81,6 +82,24 @@ CodeSentinel does not load target-local `.semgrep.yml` files by default. Users c
 If OpenHarness returns an empty structured result, treat that as a failed analysis rather than a success. The proxy path worked, but the agent did not produce a usable report.
 
 For debugging, the CLI logs to stderr and the proxy logs request/response summaries to stdout. That makes it easier to see whether the model call, proxy forwarding, or harness output is the weak point.
+
+Run scan with local remediation:
+
+```sh
+uv run codesentinel scan ../.. --fix
+```
+
+This runs the normal read-only scan first, writes `codesentinel-report.md`, then starts a second OpenHarness run that consumes the report and applies focused fixes directly in the target folder. The remediation result is also written to `fix.md` in the same folder, including fixed findings, changed lines, tests run, and remaining risks. Plain `codesentinel scan ../..` remains report-only.
+
+To create a pull request after fixing locally:
+
+```sh
+CODESENTINEL_GITHUB_TOKEN=github_pat_or_token_here uv run codesentinel scan ../.. --fix-pr
+```
+
+GitHub PR mode requires the target to be a Git repository. It creates a `codesentinel/fix-<timestamp>` branch before remediation, then expects GitHub MCP to be available to the remediation harness for GitHub operations. Prefer GitHub's official MCP server in local Docker mode, but do not add a Docker MCP server: when Docker is needed, CodeSentinel agents use ordinary shell commands against the host Docker CLI and daemon, as described in `docs/handoff.md`. The token should have least-privilege repository contents and pull request permissions. CodeSentinel never instructs the agent to push directly to `main`, `master`, or another default branch, and it never instructs the agent to merge the PR.
+
+`codesentinel remediate <repo> --apply-local` and `codesentinel remediate <repo> --github-pr` remain available when you want to rerun remediation from an existing `codesentinel-report.md`.
 
 ## OpenHarness Setup
 
