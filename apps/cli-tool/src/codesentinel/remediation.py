@@ -33,7 +33,6 @@ def build_remediation_prompt(scan_root: Path, report_markdown: str, mode: str) -
 - Never push to main, master, or any default branch.
 - Create a pull request and stop. Never merge the pull request.
 - Use native shell Docker commands if a container is needed to run the official GitHub MCP server.
-- Do not use a Docker MCP server.
 """
         if mode == "github-pr"
         else """
@@ -42,7 +41,6 @@ def build_remediation_prompt(scan_root: Path, report_markdown: str, mode: str) -
 - Do not create a pull request.
 - Never push to main, master, or any default branch.
 - Use native shell Docker commands if containers are needed for local testing.
-- Do not use a Docker MCP server.
 """
     )
 

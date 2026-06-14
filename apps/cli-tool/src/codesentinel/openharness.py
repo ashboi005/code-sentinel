@@ -95,7 +95,7 @@ def _dynamic_guardrails(target_url: str | None = None) -> str:
 - Continue only while each step yields new evidence. Stop when the evidence trail goes cold or the next step would rely on speculative guessing.
 - No destructive actions.
 - **Environment awareness**: This scan runs on the OS shown in the system environment section. Adapt shell commands accordingly — for example, macOS `grep` does not support `-P`. Use `-E`, `rg`, or `python3 -c` for cross-platform regex searches. If any shell command fails, switch to using Python scripts. You can write your own custom Python helper scripts.
-- **Docker**: You have access to a Docker MCP server. Use it to run tools, spawn containers, or download packages if you cannot run them natively.
+- **Docker**: You have access to the native shell Docker commands. Use them to run tools, spawn containers, or download packages if you cannot run them natively.
 - **Memory**: If you discover critical findings like leaked credentials, passwords, or hidden routes, append them to `memory.md` in the current working directory to persist across sessions.
 """
 

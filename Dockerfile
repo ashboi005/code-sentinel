@@ -13,7 +13,10 @@ RUN apt-get update && \
         npm \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir uv
+RUN pip install --no-cache-dir uv semgrep
+
+# Install TruffleHog native binary
+RUN curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
 
 COPY apps/cli-tool/ /app/apps/cli-tool/
 
