@@ -233,6 +233,9 @@ Only use the browser or JS analyzer tools if static analysis is insufficient, fo
 
 {_dynamic_reporting()}
 
+## Targeted Analysis
+TruffleHog and Semgrep have already performed exhaustive static analysis on this codebase. You do not need to read every file. Instead, selectively focus your manual review on key architectural files — such as server entry points, routers, middleware, database configuration, authentication logic, and environment handling — where security-critical decisions are typically made. The static tools have already covered the broad surface; your job is to apply expert judgment to the files that matter most.
+
 Do not make code changes. Keep your answer short and focused.
 {TOOL_DOCS}
 
@@ -312,9 +315,9 @@ def build_oh_command(
         "--api-format",
         "openai",
         "--base-url",
-        config.proxy_url,
+        config.effective_base_url,
         "--model",
-        "codesentinel-proxy",
+        config.effective_model,
         "--bare",
         "--system-prompt",
         _build_system_prompt(target_url),
@@ -329,8 +332,8 @@ def build_oh_environment(
     config: CliConfig, base_env: Mapping[str, str] | None = None
 ) -> dict[str, str]:
     env = dict(base_env or os.environ)
-    env["OPENAI_API_KEY"] = config.proxy_token
-    env["OPENAI_BASE_URL"] = config.proxy_url
+    env["OPENAI_API_KEY"] = config.effective_api_key
+    env["OPENAI_BASE_URL"] = config.effective_base_url
     env["OPENHARNESS_API_FORMAT"] = "openai"
     return env
 
@@ -417,7 +420,7 @@ def run_openharness(
             "starting openharness",
             scan_root=str(scan_root) if scan_root else None,
             target_url=target_url,
-            proxy_url=config.proxy_url,
+            proxy_url=config.effective_base_url,
         )
         completed = subprocess.run(
             build_oh_command(prompt, config, target_url),
@@ -436,9 +439,7 @@ def run_openharness(
                 returncode=completed.returncode,
                 stdout=completed.stdout[-2000:],
                 stderr=stderr[-2000:],
-                command=" ".join(
-                    build_oh_command(prompt, config, target_url)
-                ),
+                command="oh ...",
             )
             raise OpenHarnessError(
                 f"OpenHarness failed with exit code {completed.returncode}."
