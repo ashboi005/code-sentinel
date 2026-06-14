@@ -75,3 +75,6 @@ During the interactive setup, you will be asked for:
 
 ---
 *Built to democratize cybersecurity for the developers who build the web.*
+
+🛡️❤️ Made with love by Ashwath, Tushar, and Aditya 🚀
+
