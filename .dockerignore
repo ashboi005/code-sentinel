@@ -1,8 +1,11 @@
 .git
 node_modules
+**/node_modules
 __pycache__
+**/__pycache__
 .env
+**/.env
 *.pyc
+**/*.pyc
 .venv
-apps/proxy-backend/node_modules
-apps/proxy-backend/.env
+**/.venv
