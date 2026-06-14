@@ -84,7 +84,7 @@ Before OpenHarness runs, the CLI scans the target directory with TruffleHog file
 trufflehog filesystem <scan-root> --json --results=verified,unknown,unverified,filtered_unverified --no-update
 ```
 
-When the target contains a `.git` directory, CodeSentinel also scans Git history:
+When the target is inside a Git repository, CodeSentinel also scans Git history from the discovered repo root:
 
 ```sh
 trufflehog git file://<scan-root> --json --results=verified,unknown,unverified,filtered_unverified --no-update

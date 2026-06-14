@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
@@ -329,7 +330,7 @@ def build_oh_command(
         "-p",
         prompt,
         "--output-format",
-        "json",
+        "stream-json",
         "--api-format",
         "openai",
         "--base-url",
@@ -396,6 +397,9 @@ def extract_report(stdout: str) -> str:
         elif isinstance(parsed, dict):
             if parsed.get("type") == "result" and "text" in parsed:
                 candidates.append(_extract_report_from_conversation(parsed["text"]))
+            elif parsed.get("type") == "assistant_complete" and "text" in parsed:
+                # stream-json format: each turn emits an assistant_complete event
+                candidates.append(parsed["text"].strip())
             else:
                 for key in ("text", "content", "message", "output", "result"):
                     value = parsed.get(key)
@@ -414,6 +418,126 @@ def extract_report(stdout: str) -> str:
         "OpenHarness completed but returned an empty structured result. "
         "That usually means the agent did not actually produce a report."
     )
+
+
+def _summarize_tool(tool_name: str, tool_input: dict | None) -> str:
+    """One-line summary for a tool call."""
+    if not tool_input:
+        return ""
+    lower = tool_name.lower()
+    if lower == "bash" and "command" in tool_input:
+        return str(tool_input["command"])[:120]
+    for key in ("file_path", "path", "file", "url", "pattern", "query"):
+        if key in tool_input:
+            return str(tool_input[key])[:120]
+    entries = list(tool_input.items())
+    if entries:
+        k, v = entries[0]
+        return f"{k}={str(v)[:60]}"
+    return ""
+
+
+def _stream_oh_process(
+    cmd: list[str],
+    cwd: Path,
+    env: dict[str, str],
+    timeout: int = 2000,
+    label: str = "Agent",
+) -> tuple[str, int]:
+    """Run an OpenHarness process with stream-json and print live activity.
+
+    Returns (accumulated_stdout, returncode).
+    """
+    from .presenter import console
+
+    proc = subprocess.Popen(
+        cmd,
+        cwd=cwd,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    # Drain stderr in a background thread so it doesn't block
+    stderr_lines: list[str] = []
+
+    def _drain_stderr() -> None:
+        assert proc.stderr is not None
+        for line in proc.stderr:
+            stderr_lines.append(line)
+
+    stderr_thread = threading.Thread(target=_drain_stderr, daemon=True)
+    stderr_thread.start()
+
+    stdout_lines: list[str] = []
+    assert proc.stdout is not None
+
+    try:
+        for raw_line in proc.stdout:
+            stdout_lines.append(raw_line)
+            line = raw_line.strip()
+            if not line:
+                continue
+
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            if not isinstance(event, dict):
+                continue
+
+            etype = event.get("type", "")
+
+            if etype == "tool_started":
+                tool_name = event.get("tool_name", "tool")
+                summary = _summarize_tool(tool_name, event.get("tool_input"))
+                console.print(
+                    f"  [bold cyan]\u23f5 {tool_name}[/bold cyan] [dim]{summary}[/dim]"
+                )
+
+            elif etype == "tool_completed":
+                tool_name = event.get("tool_name", "tool")
+                is_error = event.get("is_error", False)
+                if is_error:
+                    output_preview = str(event.get("output", ""))[:200]
+                    console.print(
+                        f"  [bold red]\u2717 {tool_name}[/bold red] [dim]{output_preview}[/dim]"
+                    )
+                else:
+                    console.print(
+                        f"  [bold green]\u2713 {tool_name}[/bold green]"
+                    )
+
+            elif etype == "assistant_delta":
+                # Show brief thinking snippets — only the first ~150 chars of each delta
+                text = event.get("text", "")
+                if text.strip():
+                    preview = text.strip().replace("\n", " ")[:150]
+                    console.print(f"  [dim italic]{preview}[/dim italic]", highlight=False)
+
+            elif etype == "assistant_complete":
+                console.print("  [green]\u2500 Turn complete[/green]")
+
+            elif etype == "error":
+                msg = event.get("message", "Unknown error")
+                console.print(f"  [bold red]\u26a0 {msg}[/bold red]")
+
+            elif etype == "status":
+                msg = event.get("message", "")
+                if msg:
+                    console.print(f"  [yellow]\u2139 {msg}[/yellow]")
+
+        proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+
+    stderr_thread.join(timeout=5)
+    return "".join(stdout_lines), proc.returncode
 
 
 def run_openharness(
@@ -444,41 +568,33 @@ def run_openharness(
             target_url=target_url,
             proxy_url=config.effective_base_url,
         )
-        completed = subprocess.run(
+
+        stdout, returncode = _stream_oh_process(
             build_oh_command(prompt, config, target_url),
             cwd=cwd,
             env=build_oh_environment(config),
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            capture_output=True,
-            check=False,
             timeout=2000,
+            label="Scan",
         )
 
-        if completed.returncode != 0:
-            stderr = completed.stderr.strip()
+        if returncode != 0:
             log(
                 "openharness failed",
-                returncode=completed.returncode,
-                stdout=completed.stdout[-2000:],
-                stderr=stderr[-2000:],
-                command="oh ...",
+                returncode=returncode,
+                stdout=stdout[-2000:],
             )
             raise OpenHarnessError(
-                f"OpenHarness failed with exit code {completed.returncode}."
-                + (f"\n\nstderr:\n{stderr}" if stderr else "")
+                f"OpenHarness failed with exit code {returncode}."
             )
 
         log(
             "openharness completed",
-            returncode=completed.returncode,
-            stdout=completed.stdout[-2000:],
-            stderr=completed.stderr[-2000:],
+            returncode=returncode,
+            stdout=stdout[-2000:],
         )
-        report = extract_report(completed.stdout)
+        report = extract_report(stdout)
         log("openharness parsed report", report_preview=report[:400])
-        return OpenHarnessResult(raw_output=completed.stdout, report_markdown=report)
+        return OpenHarnessResult(raw_output=stdout, report_markdown=report)
     finally:
         memory_path = cwd / "memory.md"
         if memory_path.exists():

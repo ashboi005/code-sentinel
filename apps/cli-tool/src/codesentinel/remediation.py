@@ -9,6 +9,7 @@ from urllib import error, parse, request
 from .config import CliConfig
 from .openharness import (
     OpenHarnessError,
+    _stream_oh_process,
     build_oh_command,
     build_oh_environment,
     extract_report,
@@ -136,7 +137,7 @@ def run_remediation(
     )
 
     log("starting remediation", scan_root=str(scan_root), mode=mode, branch=branch_name)
-    completed = subprocess.run(
+    stdout, returncode = _stream_oh_process(
         build_oh_command(
             prompt,
             config,
@@ -145,33 +146,26 @@ def run_remediation(
         ),
         cwd=scan_root,
         env=build_oh_environment(config),
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        capture_output=True,
-        check=False,
         timeout=2000,
+        label="Remediation",
     )
-    if completed.returncode != 0:
-        stderr = completed.stderr.strip()
+    if returncode != 0:
         log(
             "remediation failed",
-            returncode=completed.returncode,
-            stdout=completed.stdout[-2000:],
-            stderr=stderr[-2000:],
+            returncode=returncode,
+            stdout=stdout[-2000:],
         )
         raise RemediationError(
-            f"OpenHarness remediation failed with exit code {completed.returncode}."
-            + (f"\n\nstderr:\n{stderr}" if stderr else "")
+            f"OpenHarness remediation failed with exit code {returncode}."
         )
 
     log(
         "remediation completed",
-        returncode=completed.returncode,
-        stdout=completed.stdout[-2000:],
+        returncode=returncode,
+        stdout=stdout[-2000:],
     )
     try:
-        return extract_report(completed.stdout)
+        return extract_report(stdout)
     except OpenHarnessError as exc:
         log("remediation missing final report", error=str(exc))
         if _has_remediation_changes(scan_root):
@@ -229,7 +223,7 @@ def _run_wrap_up_remediation(
     )
     prompt = _wrap_up_prompt(scan_root, report_markdown, mode)
     log("starting remediation wrap-up", scan_root=str(scan_root), mode=mode)
-    completed = subprocess.run(
+    stdout, returncode = _stream_oh_process(
         build_oh_command(
             prompt,
             config,
@@ -238,21 +232,16 @@ def _run_wrap_up_remediation(
         ),
         cwd=scan_root,
         env=build_oh_environment(config),
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        capture_output=True,
-        check=False,
         timeout=900,
+        label="Wrap-up",
     )
-    if completed.returncode != 0:
-        stderr = completed.stderr.strip()
+    if returncode != 0:
         raise RemediationError(
             "OpenHarness remediation wrap-up failed with exit code "
-            f"{completed.returncode}." + (f"\n\nstderr:\n{stderr}" if stderr else "")
+            f"{returncode}."
         )
     try:
-        return extract_report(completed.stdout)
+        return extract_report(stdout)
     except OpenHarnessError as exc:
         raise RemediationError(
             "Remediation changes were applied, but the final fix report could not be recovered."
