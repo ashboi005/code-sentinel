@@ -97,9 +97,28 @@ def build_trufflehog_command(scan_root: Path) -> list[str]:
 
 def build_trufflehog_commands(scan_root: Path) -> list[TruffleHogCommand]:
     commands = [_build_filesystem_command(scan_root)]
-    if (scan_root / ".git").exists():
-        commands.append(_build_git_command(scan_root))
+    git_root = _discover_git_root(scan_root)
+    if git_root is not None:
+        commands.append(_build_git_command(git_root))
     return commands
+
+
+def _discover_git_root(scan_root: Path) -> Path | None:
+    completed = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        cwd=scan_root,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        return None
+    root = completed.stdout.strip()
+    if not root:
+        return None
+    return Path(root)
 
 
 def _build_filesystem_command(scan_root: Path) -> TruffleHogCommand:
