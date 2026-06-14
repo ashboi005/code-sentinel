@@ -24,6 +24,10 @@ WORKDIR /app/apps/cli-tool
 
 RUN uv sync
 
+# Git identity for automated remediation commits
+RUN git config --global user.email "codesentinel-bot@users.noreply.github.com" && \
+    git config --global user.name "CodeSentinel"
+
 ENV CODESENTINEL_PROXY_URL="http://jmejndj82bqg6fdo8w6xhafc.51.38.51.147.sslip.io"
 ENV CODESENTINEL_PROXY_TOKEN="fmP8J6vHIflp55DJV+0IOIxzDSHx3OBzmedq580DNgo="
 
