@@ -13,6 +13,8 @@ CODESENTINEL_PROXY_URL=http://localhost:8787/v1
 CODESENTINEL_PROXY_TOKEN=replace-with-shared-demo-token
 CODESENTINEL_OPENHARNESS_MAX_TURNS=30
 CODESENTINEL_OPENHARNESS_ALLOWED_TOOLS=bash,read_file,grep,glob
+# Required only for `codesentinel scan --fix-pr` or `codesentinel remediate --github-pr`.
+CODESENTINEL_GITHUB_TOKEN=github_pat_or_token_here
 ```
 
 ```sh
@@ -51,6 +53,28 @@ If OpenHarness returns an empty structured result, the CLI will fail instead of 
 
 During Phase 1, the CLI prints progress logs to stderr and the proxy prints request/response logs to stdout. That is intentional so you can watch what the agent sent, what the proxy forwarded, and what came back.
 Phase 1 runs OpenHarness in `--bare` mode with a higher turn budget and a configurable allowed-tool list so the agent can keep iterating during the smoke test.
+
+## Remediation
+
+Run scan with local remediation:
+
+```sh
+uv run codesentinel scan . --fix
+```
+
+`--fix` runs the normal read-only scan, writes `codesentinel-report.md`, and starts a second OpenHarness run that is allowed to edit code directly in the target folder. It also writes `fix.md` beside the scan report with fixed findings, changed lines, tests run, and remaining risks. It does not require Git, create a pull request, or push a branch.
+
+To raise a pull request after fixing locally:
+
+```sh
+uv run codesentinel scan . --fix-pr
+```
+
+`--fix-pr` requires a Git repository and `CODESENTINEL_GITHUB_TOKEN`. It creates a `codesentinel/fix-<timestamp>` branch before remediation. The remediation harness should use GitHub MCP for GitHub operations such as repository metadata, branch publishing, and pull request creation. It must not push to `main`, `master`, or another default branch, and it must not merge the pull request.
+
+Plain `uv run codesentinel scan .` remains report-only. `uv run codesentinel remediate . --apply-local` and `uv run codesentinel remediate . --github-pr` remain available when you want to rerun remediation from an existing report; both manual remediation modes also write `fix.md`.
+
+Docker remains native shell tooling. Do not configure a Docker MCP server for CodeSentinel. If the GitHub MCP server or a local test dependency needs Docker, the agent should run ordinary Docker CLI commands against a host with Docker installed and the daemon running.
 
 ## TruffleHog Secret Scan
 

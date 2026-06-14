@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
 from .config import ConfigError, load_config
 from .openharness import OpenHarnessError, run_openharness
-from .report import write_report
+from .remediation import RemediationError, run_remediation
+from .report import write_fix_report, write_report
 from .semgrep import SemgrepError, run_semgrep
 from .trufflehog import TruffleHogError, run_trufflehog
 
@@ -15,7 +17,7 @@ DESCRIPTION = """\
        ___
       [___]    ██████╗ ██████╗ ██████╗ ███████╗    ███████╗███████╗███╗   ██╗████████╗██╗███╗   ██╗███████╗██╗     
       (o,o)   ██╔════╝██╔═══██╗██╔══██╗██╔════╝    ██╔════╝██╔════╝████╗  ██║╚══██╔══╝██║████╗  ██║██╔════╝██║     
-      /)__(\\   ██║     ██║   ██║██║  ██║█████╗      ███████╗█████╗  ██╔██╗ ██║   ██║   ██║██╔██╗ ██║█████╗  ██║     
+      /)__(\   ██║     ██║   ██║██║  ██║█████╗      ███████╗█████╗  ██╔██╗ ██║   ██║   ██║██╔██╗ ██║█████╗  ██║     
       "    "  ██║     ██║   ██║██║  ██║██╔══╝      ╚════██║██╔══╝  ██║╚██╗██║   ██║   ██║██║╚██╗██║██╔══╝  ██║     
                ╚██████╗╚██████╔╝██████╔╝███████╗    ███████║███████╗██║ ╚████║   ██║   ██║██║ ╚████║███████╗███████╗
                 ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝    ╚══════╝╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝
@@ -63,14 +65,22 @@ def resolve_scan_root(target: str) -> Path:
     return path
 
 
+def require_github_token_for_pr() -> None:
+    if not os.environ.get("CODESENTINEL_GITHUB_TOKEN", "").strip():
+        raise CliError("Missing required environment variable for GitHub PR mode: CODESENTINEL_GITHUB_TOKEN")
+
+
 def scan(
     target: str | None = None,
     url: str | None = None,
     api_key: str | None = None,
     base_url: str | None = None,
     model: str | None = None,
+    remediation_mode: str | None = None,
 ) -> int:
     config = load_config(api_key=api_key, base_url=base_url, model=model)
+    if remediation_mode == "github-pr":
+        require_github_token_for_pr()
 
     if url:
         print(f"codesentinel: scanning deployed URL {url}", file=sys.stderr)
@@ -93,6 +103,11 @@ def scan(
         )
         report_path = write_report(scan_root, result.report_markdown)
         print(f"CodeSentinel report written to {report_path}")
+        if remediation_mode:
+            remediation_result = run_remediation(scan_root, config, result.report_markdown, remediation_mode)
+            fix_report_path = write_fix_report(scan_root, remediation_result)
+            print(f"CodeSentinel fix report written to {fix_report_path}")
+            print(remediation_result)
 
     return 0
 
@@ -152,7 +167,7 @@ def interactive_mode() -> int:
        ___
       [___]    ██████╗ ██████╗ ██████╗ ███████╗    ███████╗███████╗███╗   ██╗████████╗██╗███╗   ██╗███████╗██╗     
       (o,o)   ██╔════╝██╔═══██╗██╔══██╗██╔════╝    ██╔════╝██╔════╝████╗  ██║╚══██╔══╝██║████╗  ██║██╔════╝██║     
-      /)__(\\   ██║     ██║   ██║██║  ██║█████╗      ███████╗█████╗  ██╔██╗ ██║   ██║   ██║██╔██╗ ██║█████╗  ██║     
+      /)__(\   ██║     ██║   ██║██║  ██║█████╗      ███████╗█████╗  ██╔██╗ ██║   ██║   ██║██╔██╗ ██║█████╗  ██║     
       "    "  ██║     ██║   ██║██║  ██║██╔══╝      ╚════██║██╔══╝  ██║╚██╗██║   ██║   ██║██║╚██╗██║██╔══╝  ██║     
                ╚██████╗╚██████╔╝██████╔╝███████╗    ███████║███████╗██║ ╚████║   ██║   ██║██║ ╚████║███████╗███████╗
                 ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝    ╚══════╝╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝
@@ -219,9 +234,21 @@ def interactive_mode() -> int:
 
     target: str | None = None
     url: str | None = None
+    remediation_mode: str | None = None
 
     if scan_type == "repo":
         target = Prompt.ask("Path to repository", default=".")
+        
+        console.print()
+        console.print(Rule("[bold]Post-Scan Actions[/bold]"))
+        do_fix = Confirm.ask("After scanning, should CodeSentinel also fix the vulnerabilities it finds?", default=False)
+        do_pr = False
+        if do_fix:
+            do_pr = Confirm.ask("Should CodeSentinel also create a Pull Request on GitHub with the fixes?", default=False)
+            if do_pr:
+                github_token = Prompt.ask("GitHub Personal Access Token (PAT)", password=True)
+                os.environ["CODESENTINEL_GITHUB_TOKEN"] = github_token
+        remediation_mode = "github-pr" if do_pr else "apply-local" if do_fix else None
     else:
         url = Prompt.ask("Deployed URL (e.g. https://example.com)")
 
@@ -236,6 +263,8 @@ def interactive_mode() -> int:
         summary_parts.append(f"Target: [bold]{target}[/bold]")
     if url:
         summary_parts.append(f"URL: [bold]{url}[/bold]")
+    if remediation_mode:
+        summary_parts.append(f"Remediation: [bold]{remediation_mode}[/bold]")
     console.print(Panel("\n".join(summary_parts), title="Scan Summary", border_style="green"))
 
     if not Confirm.ask("Proceed with scan?", default=True):
@@ -249,7 +278,29 @@ def interactive_mode() -> int:
         import time
         time.sleep(1.5)
         
-    return scan(target=target, url=url, api_key=api_key, base_url=base_url, model=model)
+    return scan(target=target, url=url, api_key=api_key, base_url=base_url, model=model, remediation_mode=remediation_mode)
+
+
+def remediate(target: str, apply_local: bool = False, github_pr: bool = False) -> int:
+    if apply_local == github_pr:
+        raise CliError("Specify exactly one remediation mode: --apply-local or --github-pr")
+
+    scan_root = resolve_scan_root(target)
+    report_path = scan_root / "codesentinel-report.md"
+    if not report_path.exists():
+        raise CliError(f"CodeSentinel report not found: {report_path}")
+
+    config = load_config()
+    if github_pr:
+        require_github_token_for_pr()
+
+    mode = "github-pr" if github_pr else "apply-local"
+    report_markdown = report_path.read_text(encoding="utf-8")
+    result = run_remediation(scan_root, config, report_markdown, mode)
+    fix_report_path = write_fix_report(scan_root, result)
+    print(f"CodeSentinel fix report written to {fix_report_path}")
+    print(result)
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -280,6 +331,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--url", dest="url", default=None,
         help="Deployed website URL to scan dynamically (e.g. https://example.com)",
     )
+    scan_parser.add_argument("--fix", action="store_true", help="Apply local fixes after writing the scan report")
+    scan_parser.add_argument("--fix-pr", action="store_true", help="Apply fixes after writing the scan report and create a GitHub pull request")
 
     # Provider flags
     provider_group = scan_parser.add_argument_group("provider configuration")
@@ -305,6 +358,12 @@ def build_parser() -> argparse.ArgumentParser:
         "interactive",
         help="Launch the interactive setup wizard",
     )
+    
+    # remediate subcommand
+    remediate_parser = subparsers.add_parser("remediate", help="Apply fixes from a CodeSentinel report")
+    remediate_parser.add_argument("target", help="Local directory containing codesentinel-report.md")
+    remediate_parser.add_argument("--apply-local", action="store_true", help="Apply fixes on a local remediation branch")
+    remediate_parser.add_argument("--github-pr", action="store_true", help="Apply fixes and create a GitHub pull request")
 
     return parser
 
@@ -322,6 +381,12 @@ def main(argv: list[str] | None = None) -> int:
             return interactive_mode()
 
         if args.command == "scan":
+            if args.fix and args.fix_pr:
+                print("codesentinel: cannot specify both --fix and --fix-pr", file=sys.stderr)
+                return 1
+            if args.url and (args.fix or args.fix_pr):
+                print("codesentinel: --fix and --fix-pr require a local scan target", file=sys.stderr)
+                return 1
             if args.url and args.target:
                 print("codesentinel: cannot specify both a local directory and --url", file=sys.stderr)
                 return 1
@@ -336,14 +401,20 @@ def main(argv: list[str] | None = None) -> int:
                 api_key = "ollama"
                 if model is None:
                     model = "llama3"
+            remediation_mode = "github-pr" if args.fix_pr else "apply-local" if args.fix else None
             return scan(
                 target=args.target,
                 url=args.url,
                 api_key=api_key,
                 base_url=base_url,
                 model=model,
+                remediation_mode=remediation_mode,
             )
-    except (CliError, ConfigError, TruffleHogError, SemgrepError, OpenHarnessError) as exc:
+        
+        if args.command == "remediate":
+            return remediate(target=args.target, apply_local=args.apply_local, github_pr=args.github_pr)
+            
+    except (CliError, ConfigError, TruffleHogError, SemgrepError, OpenHarnessError, RemediationError) as exc:
         print(f"codesentinel: {exc}", file=sys.stderr)
         return 1
 

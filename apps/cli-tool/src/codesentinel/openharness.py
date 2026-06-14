@@ -311,7 +311,10 @@ def _build_system_prompt(target_url: str | None = None) -> str:
 
 
 def build_oh_command(
-    prompt: str, config: CliConfig, target_url: str | None = None
+    prompt: str,
+    config: CliConfig,
+    target_url: str | None = None,
+    system_prompt: str | None = None,
 ) -> list[str]:
     return [
         "oh",
@@ -327,7 +330,7 @@ def build_oh_command(
         config.effective_model,
         "--bare",
         "--system-prompt",
-        _build_system_prompt(target_url),
+        system_prompt or _build_system_prompt(target_url),
         "--allowed-tools",
         config.openharness_allowed_tools,
         "--max-turns",
